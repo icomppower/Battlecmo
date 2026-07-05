@@ -29,6 +29,7 @@ import {
   type CampaignState,
 } from '../src/campaign/campaign';
 import { importRoster } from '../src/scenarios/breach-roster';
+import { generateMission } from '../src/campaign/generator';
 import type { Order, RoeLevel, SimEvent, SimState, Vec3 } from '../src/core/types';
 import { Renderer, type View } from './render';
 import { initBuilder } from './builder';
@@ -54,7 +55,19 @@ const PRESETS: Record<string, { plan: () => Order[]; scenario: string; pkg?: () 
   escalation: { plan: escalationPlan, scenario: 'strike-escalation', pkg: escalationPackage },
   sensorwar: { plan: sensorWarPlan, scenario: 'strike-escalation', pkg: sensorWarPackage },
   fjord: { plan: fjordPlan, scenario: 'strike-fjord' },
+  // The brief says a staff solution is on file — this loads it. It is the
+  // generator's own constructive winnability proof, timed to this mission's
+  // sampled geometry and the nemesis's current doctrine.
+  genstaff: { plan: () => currentTasking().staffPlan, scenario: 'generated' },
 };
+
+/** Deterministic per-campaign-mission tasking seed. */
+const GENERATOR_SEED = 1_789;
+
+/** The current generated tasking — a pure function of the campaign state. */
+function currentTasking() {
+  return generateMission(campaign.missionNumber, campaign.nemesis, GENERATOR_SEED);
+}
 
 /**
  * WEGO timeline over the pure tick core.
@@ -168,6 +181,9 @@ try {
     if (saved?.campaign?.squadron && saved.campaign.nemesis) {
       campaign = saved.campaign;
       campaign.nemesis.huntEmitters ??= false; // migrate pre-ISR saves
+      campaign.nemesis.gapFiller ??= false; // migrate pre-axes saves
+      campaign.nemesis.pointDefenseAlert ??= false;
+      campaign.nemesis.decoyDiscrimination ??= false;
       campaignApplied = !!saved.campaignApplied;
     }
   }
@@ -180,12 +196,24 @@ try {
  * a campaign debrief has run, the nemesis doctrine + squadron wear applied.
  */
 function scenarioBuild(name: string): () => SimState {
-  const base = SCENARIOS[name]!;
   const configs = packageConfigs;
   const applyCampaign = campaignApplied;
   const nemesis = campaign.nemesis;
   const squadron = campaign.squadron;
   const roster = campaign.roster;
+  if (name === 'generated') {
+    // Generated tasking brings its own package (the generator's problem is
+    // authored against it); campaign doctrine and squadron wear always
+    // apply — this scenario IS the campaign's long game.
+    const missionNumber = campaign.missionNumber;
+    return () => {
+      const g = generateMission(missionNumber, nemesis, GENERATOR_SEED);
+      applyNemesisDoctrine(g.state, nemesis);
+      applySquadronState(g.state, squadron);
+      return g.state;
+    };
+  }
+  const base = SCENARIOS[name]!;
   return () => {
     let s = name === 'rescue-op' && applyCampaign ? buildRescueScenario(roster) : base();
     if (configs) s = withBluePackage(s, configs);
@@ -600,10 +628,14 @@ function renderCampaign(): void {
         `<span>${o.status === 'KIA' ? '<span style="color:var(--red)">KIA</span>' : `${o.status} · ${o.missions} msn`}</span></div>`,
     )
     .join('');
+  const tasking = currentTasking()
+    .brief.map((line) => `<div class="note">▸ ${esc(line)}</div>`)
+    .join('');
   document.getElementById('campaignbody')!.innerHTML =
     `<div class="row"><span class="k">mission</span><span>#${campaign.missionNumber}</span></div>` +
     `<div class="row"><span class="k">campaign effects</span><span>${campaignApplied ? 'APPLIED (doctrine adapted, wear carried)' : 'not yet — mission 1 as briefed'}</span></div>` +
     `<h3 style="margin-top:12px;">Enemy staff notes (INTSUM)</h3>${notes}` +
+    `<h3 style="margin-top:12px;">Generated tasking (scenario: generated strike)</h3>${tasking}` +
     `<h3 style="margin-top:12px;">Squadron</h3>${sq}` +
     `<h3 style="margin-top:12px;">Ground roster</h3>${roster}`;
 }

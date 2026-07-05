@@ -15,4 +15,5 @@ export { BREACH_ROSTER, importRoster } from './scenarios/breach-roster';
 export * from './scenarios/plans';
 export * from './oob/assembly';
 export * from './campaign/campaign';
+export * from './campaign/generator';
 export { generateDebrief } from './replay/debrief';
