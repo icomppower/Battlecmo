@@ -31,6 +31,7 @@ export function tick(state: SimState, ordersLog: Order[], seed: number): SimStat
   reactToInboundArms(s);
   flyMissiles(s, seed);
   updateContacts(s);
+  runSamDoctrine(s);
   runDefensiveEngagements(s);
 
   s.tick += 1;
@@ -106,6 +107,7 @@ function applyOrders(s: SimState, ordersLog: Order[]): void {
 function launch(s: SimState, shooter: Unit, weaponId: string, targetId: string): void {
   const station = shooter.weapons.find((st) => st.weaponId === weaponId)!;
   station.count -= 1;
+  shooter.shotsFired = (shooter.shotsFired ?? 0) + 1;
   const missileId = `m${s.nextEntitySeq++}`;
   s.missiles[missileId] = {
     id: missileId,
@@ -186,7 +188,14 @@ function reactToInboundArms(s: SimState): void {
       const weapon = s.weaponCatalog[missile.weaponId];
       if (!weapon?.antiRadiation) continue;
       if (dist3d(missile.pos, unit.pos) <= doctrine.armReactionRange) {
-        unit.suppressedUntilTick = s.tick + doctrine.shutdownTicks;
+        // Adapted window: every survived scare shortens the next blink.
+        const scares = unit.armScares ?? 0;
+        const window = Math.max(
+          doctrine.minShutdownTicks ?? 1,
+          Math.round(doctrine.shutdownTicks * Math.pow(doctrine.shutdownDecay ?? 1, scares)),
+        );
+        unit.armScares = scares + 1;
+        unit.suppressedUntilTick = s.tick + window;
         s.events.push({
           tick: s.tick,
           type: 'EMITTER_SHUTDOWN',
@@ -287,6 +296,76 @@ function updateContacts(s: SimState): void {
           delete table[contact.targetId];
           s.events.push({ tick: s.tick, type: 'CONTACT_LOST', side, targetId: contact.targetId });
         }
+      }
+    }
+  }
+}
+
+/**
+ * Adaptive battery doctrine (step 3 of the build order) — a deterministic
+ * state machine per SAM site:
+ *
+ *  - EMCON: a CUED battery holds its fire-control radar cold until the IADS
+ *    (any own-side sensor, e.g. the EW radar) has a contact inside cueRange,
+ *    and goes cold again once the cue ages out. A cold radar can't be
+ *    ARM-scared and eats anti-radiation shots at degraded Pk — pre-planned
+ *    SEAD timing stops working against it.
+ *  - Shoot-and-scoot: after scootAfterShots launches the battery goes cold
+ *    and relocates to its fallback position; while on the march it cannot
+ *    shoot, which is the window an alert strike lead exploits.
+ */
+function runSamDoctrine(s: SimState): void {
+  for (const unit of sortedAliveUnits(s)) {
+    const doctrine = unit.samDoctrine;
+    if (!doctrine) continue;
+    const radars = unit.sensors.filter((se) => se.kind === 'RADAR');
+    if (radars.length === 0) continue;
+    const emitting = radars.some((se) => se.emitting);
+
+    // Arrival at the fallback site.
+    if (unit.relocating && unit.waypoints.length === 0) {
+      unit.relocating = false;
+      unit.speed = 0;
+      doctrine.scootTo = undefined; // one relocation per prepared site
+      unit.shotsFired = 0;
+      s.events.push({ tick: s.tick, type: 'SAM_DEPLOYED', unitId: unit.id });
+    }
+
+    // Shoot-and-scoot trigger.
+    if (
+      !unit.relocating &&
+      doctrine.scootAfterShots !== undefined &&
+      doctrine.scootTo &&
+      (unit.shotsFired ?? 0) >= doctrine.scootAfterShots
+    ) {
+      unit.relocating = true;
+      unit.waypoints = [{ ...doctrine.scootTo }];
+      unit.speed = doctrine.scootSpeed ?? 8;
+      for (const r of radars) r.emitting = false;
+      if (emitting) s.events.push({ tick: s.tick, type: 'SAM_EMCON', unitId: unit.id, emitting: false });
+      s.events.push({ tick: s.tick, type: 'SAM_RELOCATING', unitId: unit.id });
+      continue;
+    }
+
+    if (unit.relocating) continue; // radar stays cold on the march
+
+    // EMCON discipline.
+    if (doctrine.emcon === 'CUED') {
+      const cued = Object.values(s.contacts[unit.side]).some((c) => {
+        const target = s.units[c.targetId];
+        return target?.alive && dist2d(unit.pos, target.pos) <= (doctrine.cueRange ?? Infinity);
+      });
+      if (cued) unit.lastCuedTick = s.tick;
+      const cueFresh =
+        unit.lastCuedTick !== undefined &&
+        s.tick - unit.lastCuedTick <= (doctrine.coldAfterTicks ?? 30);
+
+      if (cueFresh && !emitting) {
+        for (const r of radars) r.emitting = true;
+        s.events.push({ tick: s.tick, type: 'SAM_EMCON', unitId: unit.id, emitting: true });
+      } else if (!cueFresh && emitting) {
+        for (const r of radars) r.emitting = false;
+        s.events.push({ tick: s.tick, type: 'SAM_EMCON', unitId: unit.id, emitting: false });
       }
     }
   }

@@ -69,6 +69,34 @@ export interface EmitterDoctrine {
   armReactionRange: number;
   /** Ticks the radar stays dark after an ARM scare. */
   shutdownTicks: number;
+  /**
+   * Crew adaptation: each survived ARM scare multiplies the next shutdown
+   * window (e.g. 0.5 halves it — they learn the missiles go stupid when they
+   * blink, and blink shorter). Omit for a crew that never adapts.
+   */
+  shutdownDecay?: number;
+  /** Floor for the adapted shutdown window. */
+  minShutdownTicks?: number;
+}
+
+/**
+ * Adaptive SAM battery doctrine — the step-3 layer that turns a static
+ * launcher into an opponent. All of it is deterministic state-machine
+ * behavior; the later nemesis system tunes these numbers between missions.
+ */
+export interface SamDoctrine {
+  /** ACTIVE: radiate continuously. CUED: hold the FCR cold until cued. */
+  emcon: 'ACTIVE' | 'CUED';
+  /** CUED: light up when an own-side contact is within this range (m). */
+  cueRange?: number;
+  /** CUED: go cold again after this many ticks without a cue (default 30). */
+  coldAfterTicks?: number;
+  /** Shoot-and-scoot: relocate after firing this many missiles. */
+  scootAfterShots?: number;
+  /** Fallback position (consumed on arrival — one relocation per site). */
+  scootTo?: Vec3;
+  /** March speed while relocating, m/s. */
+  scootSpeed?: number;
 }
 
 export interface Unit {
@@ -86,8 +114,17 @@ export interface Unit {
   weapons: WeaponStation[];
   jammer?: JammerDef;
   emitterDoctrine?: EmitterDoctrine;
+  samDoctrine?: SamDoctrine;
   /** Radar forced dark until this tick (SEAD suppression / ARM reaction). */
   suppressedUntilTick?: number;
+  /** Survived ARM scares — drives EmitterDoctrine.shutdownDecay. */
+  armScares?: number;
+  /** Missiles fired since last relocation — drives shoot-and-scoot. */
+  shotsFired?: number;
+  /** Set while a scooting battery is on the march (radar cold, no shooting). */
+  relocating?: boolean;
+  /** Last tick a CUED battery had a cue inside cueRange. */
+  lastCuedTick?: number;
   /** Fuel model — only meaningful for aircraft. */
   fuelKg?: number;
   burnKgPerTick?: number;
@@ -135,6 +172,9 @@ export type SimEvent =
   | { tick: number; type: 'UNIT_DESTROYED'; unitId: string; byMissileId: string }
   | { tick: number; type: 'EMITTER_SHUTDOWN'; unitId: string; untilTick: number; cause: 'ARM_INBOUND' }
   | { tick: number; type: 'EMITTER_BACK_UP'; unitId: string }
+  | { tick: number; type: 'SAM_EMCON'; unitId: string; emitting: boolean }
+  | { tick: number; type: 'SAM_RELOCATING'; unitId: string }
+  | { tick: number; type: 'SAM_DEPLOYED'; unitId: string }
   | { tick: number; type: 'BINGO_FUEL'; unitId: string }
   | { tick: number; type: 'FUEL_EXHAUSTED'; unitId: string }
   | { tick: number; type: 'JAMMER_SET'; unitId: string; active: boolean }

@@ -48,6 +48,11 @@
     button.on { background: #14304f; border-color: var(--blue); color: #bcdcff; }
     button.danger.on { background: #46201d; border-color: var(--red); color: #ffc9c5; }
     button:disabled { opacity: 0.45; cursor: default; }
+    select {
+      background: #17202e; color: var(--text);
+      border: 1px solid #263349; border-radius: 4px;
+      font: inherit; padding: 3px 6px;
+    }
     main { flex: 1; display: flex; min-height: 0; }
     #mapwrap { flex: 1; position: relative; min-width: 0; }
     canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
@@ -110,6 +115,13 @@
       <button data-roe="HOLD" class="danger">HOLD</button>
       <button data-roe="TIGHT">TIGHT</button>
       <button data-roe="FREE">FREE</button>
+    </div>
+    <div class="group">
+      <span class="lbl">SCENARIO</span>
+      <select id="scenario">
+        <option value="strike-basic">strike-basic (static IADS)</option>
+        <option value="strike-adaptive">strike-adaptive (EMCON + scoot)</option>
+      </select>
     </div>
     <div class="group">
       <button id="godview">TRUTH VIEW</button>

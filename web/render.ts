@@ -24,6 +24,13 @@ export interface RenderOptions {
   selectedId: string | null;
   /** Reference RCS used to draw "assessed" radar detection rings. */
   briefedRcs: number;
+  /**
+   * Where the intel dossier put RED's ground sites at mission start. Outside
+   * truth view, RED ground units are plotted here — a battery that scoots
+   * keeps its map ghost at the briefed spot, because BLUE has no sensor in
+   * this package that would re-find it.
+   */
+  briefedPositions: Record<string, Vec3>;
 }
 
 const COLORS = {
@@ -57,6 +64,19 @@ export class Renderer {
       x: view.cx + (sx - width / 2) / view.scale,
       y: view.cy - (sy - height / 2) / view.scale,
     };
+  }
+
+  /** Position a unit is *plotted* at, honoring the intel-vs-truth rule. */
+  private plotPos(u: Unit, opts: RenderOptions): Vec3 {
+    if (!opts.godView && u.side === 'RED' && u.domain !== 'AIR') {
+      return opts.briefedPositions[u.id] ?? u.pos;
+    }
+    return u.pos;
+  }
+
+  private isDisplaced(u: Unit, opts: RenderOptions): boolean {
+    const briefed = opts.briefedPositions[u.id];
+    return !!briefed && Math.hypot(u.pos.x - briefed.x, u.pos.y - briefed.y) > 500;
   }
 
   draw(state: SimState, prev: SimState | null, view: View, opts: RenderOptions): void {
@@ -133,17 +153,18 @@ export class Renderer {
     for (const u of Object.values(state.units)) {
       if (!u.alive || u.side !== 'RED') continue;
       const suppressed = isSuppressed(u, state.tick);
+      const pp = this.plotPos(u, opts);
 
       // Weapon engagement rings.
       for (const st of u.weapons) {
         const w = state.weaponCatalog[st.weaponId];
         if (!w || st.count <= 0) continue;
-        this.circle(ctx, view, u.pos, w.maxRange);
+        this.circle(ctx, view, pp, w.maxRange);
         ctx.strokeStyle = suppressed ? 'rgba(90,100,116,0.5)' : 'rgba(255,95,86,0.55)';
         ctx.lineWidth = 1.5;
         ctx.setLineDash(suppressed ? [3, 5] : []);
         ctx.stroke();
-        this.circle(ctx, view, u.pos, w.maxRange);
+        this.circle(ctx, view, pp, w.maxRange);
         ctx.fillStyle = suppressed ? 'rgba(90,100,116,0.03)' : 'rgba(255,95,86,0.05)';
         ctx.fill();
       }
@@ -156,7 +177,7 @@ export class Renderer {
             ? 0
             : rcsScaledRange(sensor, opts.briefedRcs) * jammingFactor(state, u);
         if (range <= 0) continue;
-        this.circle(ctx, view, u.pos, range);
+        this.circle(ctx, view, pp, range);
         ctx.strokeStyle = 'rgba(255,184,77,0.35)';
         ctx.setLineDash([8, 6]);
         ctx.lineWidth = 1;
@@ -248,7 +269,7 @@ export class Renderer {
     opts: RenderOptions,
   ): void {
     for (const u of Object.values(state.units)) {
-      const [sx, sy] = this.toScreen(view, u.pos);
+      const [sx, sy] = this.toScreen(view, this.plotPos(u, opts));
       const isBlue = u.side === 'BLUE';
       const color = u.alive ? (isBlue ? COLORS.blue : COLORS.red) : COLORS.gray;
 
@@ -313,6 +334,9 @@ export class Renderer {
       }
       if (u.side === 'RED' && isSuppressed(u, state.tick)) {
         tag += ` · DOWN ${u.suppressedUntilTick! - state.tick}s`;
+      }
+      if (u.side === 'RED' && u.domain !== 'AIR' && this.isDisplaced(u, opts)) {
+        tag += opts.godView ? ' · DISPLACED' : ' · last known';
       }
       // Stagger ground-site labels so co-located sites stay readable:
       // shooters above, sensors beside, the objective below.

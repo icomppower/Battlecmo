@@ -26,6 +26,16 @@ One tick = one second of mission time. The tick function is **pure**: no wall cl
 | `rng.ts` | Seeded, order-independent random streams (randomness is reserved for weapon endgames). |
 | `types.ts` | The full state/orders/events data model, including ROE authority levels (`HOLD` / `TIGHT` / `FREE`) and pre-briefed target lists. |
 
+## Adaptive IADS (src/scenarios/strike-adaptive.ts)
+
+Step 3 of the build order: the same order of battle, but the SAM battery fights back doctrinally — all deterministic state-machine behavior (`SamDoctrine` / `EmitterDoctrine`), which is exactly the surface the later nemesis system will tune between missions:
+
+- **EMCON discipline** — the fire-control radar starts cold and lights up only when the IADS holds a contact inside its cue ring, going cold again when the cue ages out. A *pre-planned* ARM shot arrives at a silent radar: no scare, no suppression window, quarter Pk. `tests/adaptive.test.ts` proves the static scenario's winning plan gets both strikers killed here.
+- **Shoot-and-scoot** — after its salvo the battery goes cold and displaces to a prepared fallback site; it cannot shoot on the march, and outside truth view the map keeps plotting it at the *briefed* position (BLUE has nothing in this package that would re-find it).
+- **Crew adaptation** — each survived ARM scare shortens the next shutdown window (`shutdownDecay`), so repeated SEAD bluffs pay out less each time.
+
+The proven counter (`baitAndBlinkPlan` in `tests/plans.ts`) is doctrinal, not just retimed: a striker ingresses at 60 m — *below* the SAM's 100 m minimum engagement altitude — to force a cue the battery can see but cannot shoot, the ARM launches reactively against the now-radiating emitter, and the second striker releases inside the blink window. Objective destroyed, zero losses, zero RED launches.
+
 ## Reference scenario (src/scenarios/strike-basic.ts)
 
 One BLUE strike package (2 strikers with standoff AGMs, 1 SEAD shooter with ARMs, 1 standoff jammer) against a static RED IADS (early-warning radar, long-range SAM battery, and the objective — a C2 node). The geometry deliberately places the AGM release ring *inside* the SAM engagement ring, so the mission only works if the jamming window and SEAD shot open a suppression corridor first.
@@ -60,7 +70,7 @@ CMO-style real-time/WEGO execution over the headless core — a 2D tactical map 
 
 1. ✅ Deterministic multi-domain tick core (headless), tested against a single strike scenario
 2. ✅ Executive Version UI on one hand-made scenario: 1 strike package vs. a static IADS
-3. EW/jamming + SEAD sequencing + adaptive SAM behavior
+3. ✅ EW/jamming + SEAD sequencing + adaptive SAM behavior (EMCON, shoot-and-scoot, ARM-scare adaptation)
 4. Ground extraction tie-in (Breach Protocol roster/timer import)
 5. Planning Version UI: OOB assembly, ROE authoring, mission clock sync
 6. Nemesis IADS adaptation + persistent squadron roster

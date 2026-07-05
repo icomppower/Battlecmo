@@ -1,10 +1,16 @@
 import { tick } from '../src/core/tick';
 import { validateLaunch } from '../src/core/weapons';
 import { buildStrikeScenario } from '../src/scenarios/strike-basic';
-import type { Order, RoeLevel, SimEvent, SimState } from '../src/core/types';
+import { buildAdaptiveStrikeScenario } from '../src/scenarios/strike-adaptive';
+import type { Order, RoeLevel, SimEvent, SimState, Vec3 } from '../src/core/types';
 import { Renderer, type View } from './render';
 
 const SEED = 42;
+
+const SCENARIOS: Record<string, () => SimState> = {
+  'strike-basic': buildStrikeScenario,
+  'strike-adaptive': buildAdaptiveStrikeScenario,
+};
 
 /**
  * WEGO timeline over the pure tick core.
@@ -16,9 +22,13 @@ const SEED = 42;
  * untouched prefix yields byte-identical states, so only the future changes.
  */
 class Timeline {
-  states: SimState[] = [buildStrikeScenario()];
+  states: SimState[];
   orders: Order[] = [];
   cursor = 0;
+
+  constructor(private build: () => SimState) {
+    this.states = [build()];
+  }
 
   get current(): SimState {
     return this.states[this.cursor]!;
@@ -47,16 +57,26 @@ class Timeline {
     this.cursor = Math.max(0, Math.min(to, this.states.length - 1));
   }
 
-  reset(): void {
-    this.states = [buildStrikeScenario()];
+  reset(build?: () => SimState): void {
+    if (build) this.build = build;
+    this.states = [this.build()];
     this.orders = [];
     this.cursor = 0;
+  }
+
+  /** Intel-dossier positions of RED ground sites (mission-start truth). */
+  briefedPositions(): Record<string, Vec3> {
+    const out: Record<string, Vec3> = {};
+    for (const u of Object.values(this.states[0]!.units)) {
+      if (u.side === 'RED' && u.domain !== 'AIR') out[u.id] = u.pos;
+    }
+    return out;
   }
 }
 
 // ---------------------------------------------------------------------------
 
-const timeline = new Timeline();
+const timeline = new Timeline(SCENARIOS['strike-basic']!);
 const canvas = document.getElementById('map') as HTMLCanvasElement;
 const renderer = new Renderer(canvas);
 
@@ -173,6 +193,13 @@ document.getElementById('godview')!.addEventListener('click', () => {
 
 document.getElementById('reset')!.addEventListener('click', () => {
   timeline.reset();
+  selectedId = null;
+  speed = 0;
+});
+
+const scenarioSelect = document.getElementById('scenario') as HTMLSelectElement;
+scenarioSelect.addEventListener('change', () => {
+  timeline.reset(SCENARIOS[scenarioSelect.value]!);
   selectedId = null;
   speed = 0;
 });
@@ -322,6 +349,16 @@ function formatEvent(e: SimEvent, state: SimState): { text: string; cls: string 
       return { text: `${name(e.unitId)} flamed out`, cls: 'red' };
     case 'JAMMER_SET':
       return { text: `${name(e.unitId)} jammer ${e.active ? 'RADIATING' : 'standby'}`, cls: 'blue' };
+    case 'SAM_EMCON':
+      // ESM is passive — emissions starting/stopping are knowable to BLUE.
+      return {
+        text: `${name(e.unitId)} emitter ${e.emitting ? 'RADIATING' : 'silent'}`,
+        cls: e.emitting ? 'red' : '',
+      };
+    case 'SAM_RELOCATING':
+      return godView ? { text: `${name(e.unitId)} displacing (shoot-and-scoot)`, cls: 'red' } : null;
+    case 'SAM_DEPLOYED':
+      return godView ? { text: `${name(e.unitId)} redeployed`, cls: 'red' } : null;
     case 'ROE_SET':
       return e.side === 'BLUE' ? { text: `ROE set to ${e.level}`, cls: 'blue' } : null;
   }
@@ -369,7 +406,12 @@ function frame(now: number): void {
   }
 
   const state = timeline.current;
-  renderer.draw(state, timeline.prev, view, { godView, selectedId, briefedRcs: 3 });
+  renderer.draw(state, timeline.prev, view, {
+    godView,
+    selectedId,
+    briefedRcs: 3,
+    briefedPositions: timeline.briefedPositions(),
+  });
 
   // Header/state widgets.
   clockEl.textContent = `T+${fmtClock(state.tick)}`;
