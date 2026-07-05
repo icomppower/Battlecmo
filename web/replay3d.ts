@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { SimState, Unit, Vec3 } from '../src/core/types';
 import { isSuppressed } from '../src/core/sensors';
+import { getTerrain, type Heightfield } from '../src/core/terrain';
 
 /**
  * Phase 1 of the 3D replay: a READ-ONLY cinematic view over the same
@@ -98,10 +99,62 @@ export class Replay3D {
     this.camera.updateProjectionMatrix();
   }
 
+  /**
+   * Real heightfield terrain, displaced from the SAME data the sim's LOS
+   * ray-marches — the fjord arm that hides you on the map is the fjord arm
+   * you fly down here. Same ×ALT vertical exaggeration as unit altitudes.
+   */
+  private buildHeightfieldMesh(hf: Heightfield): void {
+    const w = hf.width;
+    const h = hf.height;
+    const positions = new Float32Array(w * h * 3);
+    const colors = new Float32Array(w * h * 3);
+    const low = new THREE.Color(0x1a2434);
+    const mid = new THREE.Color(0x3c4c66);
+    const high = new THREE.Color(0x9aa2b2);
+    const c = new THREE.Color();
+    for (let r = 0; r < h; r++) {
+      for (let col = 0; col < w; col++) {
+        const i = r * w + col;
+        const elev = hf.data[i]!;
+        positions[i * 3] = (hf.originX + col * hf.cellSize) * S;
+        positions[i * 3 + 1] = Math.max(elev, 0) * S * ALT;
+        positions[i * 3 + 2] = -(hf.originY + r * hf.cellSize) * S;
+        const t = Math.min(1, elev / 1_900);
+        if (t < 0.35) c.lerpColors(low, mid, t / 0.35);
+        else c.lerpColors(mid, high, (t - 0.35) / 0.65);
+        colors[i * 3] = c.r;
+        colors[i * 3 + 1] = c.g;
+        colors[i * 3 + 2] = c.b;
+      }
+    }
+    const indices: number[] = [];
+    for (let r = 0; r < h - 1; r++) {
+      for (let col = 0; col < w - 1; col++) {
+        const a = r * w + col;
+        indices.push(a, a + w, a + 1, a + 1, a + w, a + w + 1);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(
+      geo,
+      new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: false }),
+    );
+    mesh.userData.staticScenery = true;
+    this.scene.add(mesh);
+  }
+
   /** Ridges and site rings never move — build them once per mission. */
   private buildStatic(state: SimState): void {
     if (this.staticBuilt) return;
     this.staticBuilt = true;
+
+    const hf = getTerrain(state.terrainId);
+    if (hf) this.buildHeightfieldMesh(hf);
 
     for (const ridge of state.ridges ?? []) {
       const dx = ridge.x2 - ridge.x1;

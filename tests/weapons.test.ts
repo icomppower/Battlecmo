@@ -6,31 +6,35 @@ import { miniState, plane, radarSite } from './helpers';
 const sam = WEAPONS['sam-longbow']!;
 const agm = WEAPONS['agm-stormbreak']!;
 
+/** Envelope check against a throwaway flat-world state (AGL == MSL there). */
+const env = (w: (typeof sam), a: Parameters<typeof miniState>[0][number], b: Parameters<typeof miniState>[0][number]) =>
+  inEnvelope(miniState([a, b]), w, a, b);
+
 describe('weapon envelopes', () => {
   it('gates on range band', () => {
     const site = radarSite('sam', 'RED', 0, 90_000, { weapons: [{ weaponId: sam.id, count: 4 }] });
     const near = plane('near', 'BLUE', -2_000, 8_000); // inside minRange 3 km
     const inside = plane('inside', 'BLUE', -30_000, 8_000);
     const far = plane('far', 'BLUE', -45_000, 8_000); // outside maxRange 40 km
-    expect(inEnvelope(sam, site, near)).toBe(false);
-    expect(inEnvelope(sam, site, inside)).toBe(true);
-    expect(inEnvelope(sam, site, far)).toBe(false);
+    expect(env(sam, site, near)).toBe(false);
+    expect(env(sam, site, inside)).toBe(true);
+    expect(env(sam, site, far)).toBe(false);
   });
 
   it('gates on target altitude band', () => {
     const site = radarSite('sam', 'RED', 0, 90_000);
     const inTheWeeds = plane('low', 'BLUE', -20_000, 50); // below minTargetAlt 100 m
     const cruising = plane('mid', 'BLUE', -20_000, 8_000);
-    expect(inEnvelope(sam, site, inTheWeeds)).toBe(false);
-    expect(inEnvelope(sam, site, cruising)).toBe(true);
+    expect(env(sam, site, inTheWeeds)).toBe(false);
+    expect(env(sam, site, cruising)).toBe(true);
   });
 
   it('gates on target domain', () => {
     const shooter = plane('s', 'BLUE', -20_000, 8_000);
     const groundTarget = radarSite('g', 'RED', 0, 0);
     const airTarget = plane('a', 'RED', -5_000, 8_000);
-    expect(inEnvelope(agm, shooter, groundTarget)).toBe(true);
-    expect(inEnvelope(agm, shooter, airTarget)).toBe(false);
+    expect(env(agm, shooter, groundTarget)).toBe(true);
+    expect(env(agm, shooter, airTarget)).toBe(false);
   });
 });
 

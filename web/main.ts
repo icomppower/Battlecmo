@@ -4,12 +4,14 @@ import { buildStrikeScenario } from '../src/scenarios/strike-basic';
 import { buildAdaptiveStrikeScenario } from '../src/scenarios/strike-adaptive';
 import { buildRescueScenario } from '../src/scenarios/rescue-op';
 import { buildEscalationScenario } from '../src/scenarios/strike-escalation';
+import { buildFjordScenario } from '../src/scenarios/strike-fjord';
 import {
   baitAndBlinkPlan,
   escalationPackage,
   escalationPlan,
   sensorWarPackage,
   sensorWarPlan,
+  fjordPlan,
   goodPlan,
   jamOnlyPlan,
   naivePlan,
@@ -37,6 +39,7 @@ const SCENARIOS: Record<string, () => SimState> = {
   'strike-adaptive': buildAdaptiveStrikeScenario,
   'rescue-op': buildRescueScenario,
   'strike-escalation': buildEscalationScenario,
+  'strike-fjord': buildFjordScenario,
 };
 
 const PRESETS: Record<string, { plan: () => Order[]; scenario: string; pkg?: () => AircraftConfig[] }> = {
@@ -47,6 +50,7 @@ const PRESETS: Record<string, { plan: () => Order[]; scenario: string; pkg?: () 
   rescue: { plan: rescuePlan, scenario: 'rescue-op' },
   escalation: { plan: escalationPlan, scenario: 'strike-escalation', pkg: escalationPackage },
   sensorwar: { plan: sensorWarPlan, scenario: 'strike-escalation', pkg: sensorWarPackage },
+  fjord: { plan: fjordPlan, scenario: 'strike-fjord' },
 };
 
 /**

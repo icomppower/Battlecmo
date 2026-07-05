@@ -1,5 +1,6 @@
 import type { SensorDef, SimState, Unit } from './types';
 import { dist2d, dist3d, losBlocked, radarHorizon } from './geometry';
+import { getTerrain, losBlockedByTerrain } from './terrain';
 
 /**
  * Sensor model — pillar 1: "you fight what your radar actually detected".
@@ -64,6 +65,8 @@ export function canDetect(state: SimState, owner: Unit, target: Unit): boolean {
   const range = dist2d(owner.pos, target.pos);
   // Terrain masking blocks every sensor kind — radar, IR, and eyes alike.
   if (losBlocked(owner.pos, target.pos, state.ridges)) return false;
+  const hf = getTerrain(state.terrainId);
+  if (hf && losBlockedByTerrain(owner.pos, target.pos, hf)) return false;
   for (const sensor of owner.sensors) {
     // Sensor aperture limits: wrong-domain targets are invisible, and a
     // GMTI-style radar cannot break out a target below its speed floor.

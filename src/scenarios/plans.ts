@@ -231,6 +231,36 @@ export function sensorWarPlan(): Order[] {
   return escalationPlan(); // Watchtower needs no orders — its orbit IS the plan
 }
 
+/**
+ * The fjord run (strike-fjord, real Romsdal terrain): thread the radar
+ * shadow the elevation data actually contains. The corridor waypoints came
+ * out of a BFS over the masked-water cells of the baked heightfield — this
+ * route exists in Norway, not in the scenario author's imagination. Release
+ * from the shadow at ~28 km and the SAM never gets the track its doctrine
+ * needs; terrain denies the track, not the shot.
+ */
+export function fjordPlan(): Order[] {
+  const corridor = [
+    { x: -50_500, y: 11_000, alt: 120 },
+    { x: -45_500, y: 12_000, alt: 120 },
+    { x: -40_000, y: 12_000, alt: 120 },
+    { x: -34_000, y: 12_000, alt: 120 },
+    { x: -28_500, y: 12_000, alt: 120 },
+    { x: -22_500, y: 12_000, alt: 120 },
+    { x: -22_500, y: 11_000, alt: 120 },
+  ];
+  const egress = [...corridor].reverse().concat([{ x: -140_000, y: 10_000, alt: 120 }]);
+  return [
+    { atTick: 0, type: 'SET_ROE', side: 'BLUE', level: 'TIGHT' },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: corridor },
+    { atTick: 10, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: corridor },
+    { atTick: 140, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'agm-stormbreak', targetId: 'red-hq' },
+    { atTick: 141, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'agm-stormbreak', targetId: 'red-hq' },
+    { atTick: 145, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: egress },
+    { atTick: 155, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: egress },
+  ];
+}
+
 export function escalationPlan(): Order[] {
   return [
     { atTick: 0, type: 'SET_ROE', side: 'BLUE', level: 'TIGHT' },

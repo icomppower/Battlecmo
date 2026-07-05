@@ -354,6 +354,11 @@ export interface SimState {
   groundOp?: GroundOp;
   /** Terrain ridges that mask line of sight (empty/absent = flat world). */
   ridges?: Ridge[];
+  /**
+   * Heightfield terrain id, resolved through the static terrain registry —
+   * the data lives in code, not in state, so WEGO clones stay cheap.
+   */
+  terrainId?: string;
   /** BLUE's confidence-graded intel dossier, keyed by RED unit id. */
   intel?: Record<string, IntelEntry>;
 }

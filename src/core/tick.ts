@@ -9,6 +9,7 @@ import {
   isSuppressed,
 } from './sensors';
 import { validateLaunch } from './weapons';
+import { aglOf } from './terrain';
 
 /** Pk multiplier for an anti-radiation missile whose target radar went dark. */
 const ARM_VS_SILENT_PK_FACTOR = 0.25;
@@ -441,7 +442,7 @@ function runCapDoctrine(s: SimState): void {
       for (const contact of contacts) {
         const t = s.units[contact.targetId];
         if (!t?.alive || t.domain !== 'AIR') continue;
-        if (t.pos.alt < (doctrine.commitMinAlt ?? 0)) continue;
+        if (aglOf(s, t) < (doctrine.commitMinAlt ?? 0)) continue;
         if (!t.sensors.some((se) => se.kind === 'RADAR' && se.emitting)) continue;
         if (dist2d(doctrine.station, t.pos) > ring) continue;
         target = t;
@@ -452,7 +453,7 @@ function runCapDoctrine(s: SimState): void {
     for (const contact of target ? [] : contacts) {
       const t = s.units[contact.targetId];
       if (!t?.alive || t.domain !== 'AIR') continue;
-      if (t.pos.alt < (doctrine.commitMinAlt ?? 0)) continue;
+      if (aglOf(s, t) < (doctrine.commitMinAlt ?? 0)) continue;
       if (dist2d(doctrine.station, t.pos) > doctrine.commitRange) continue;
       target = t;
       break;
@@ -535,7 +536,7 @@ function runSamDoctrine(s: SimState): void {
         return (
           target?.alive &&
           target.domain === 'AIR' &&
-          target.pos.alt >= (doctrine.cueMinAlt ?? 0) &&
+          aglOf(s, target) >= (doctrine.cueMinAlt ?? 0) &&
           dist2d(unit.pos, target.pos) <= (doctrine.cueRange ?? Infinity)
         );
       });

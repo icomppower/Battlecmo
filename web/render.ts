@@ -1,5 +1,6 @@
 import type { IntelEntry, SimState, Unit, Vec3 } from '../src/core/types';
 import { isSuppressed, jammingFactor, rcsScaledRange } from '../src/core/sensors';
+import { getTerrain, type Heightfield } from '../src/core/terrain';
 
 /**
  * 2D tactical map renderer for the Executive layer. Pure draw code: reads a
@@ -100,6 +101,7 @@ export class Renderer {
     ctx.fillStyle = COLORS.bg;
     ctx.fillRect(0, 0, width, height);
 
+    this.drawTerrain(ctx, state, view);
     this.drawGrid(ctx, view);
     this.drawRidges(ctx, state, view);
     this.drawJammerCoverage(ctx, state, view);
@@ -110,6 +112,27 @@ export class Renderer {
     this.drawMissiles(ctx, state, prev, view);
     this.drawUnits(ctx, state, prev, view, opts);
     this.drawScaleBar(ctx, view);
+  }
+
+  private terrainCache: { id: string; canvas: HTMLCanvasElement } | null = null;
+
+  /**
+   * Heightfield underlay — the SAME data the sim's LOS checks read, so what
+   * looks like a shadowed fjord arm on the map IS one. Rendered once per
+   * terrain into an offscreen canvas (dark hypsometric ramp), then blitted
+   * with the view transform each frame.
+   */
+  private drawTerrain(ctx: CanvasRenderingContext2D, state: SimState, view: View): void {
+    const hf = getTerrain(state.terrainId);
+    if (!hf) return;
+    if (this.terrainCache?.id !== hf.name) {
+      this.terrainCache = { id: hf.name, canvas: renderTerrainBitmap(hf) };
+    }
+    const spanX = (hf.width - 1) * hf.cellSize;
+    const spanY = (hf.height - 1) * hf.cellSize;
+    const [sx0, sy0] = this.toScreen(view, { x: hf.originX, y: hf.originY + spanY });
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(this.terrainCache.canvas, sx0, sy0, spanX * view.scale, spanY * view.scale);
   }
 
   private drawGrid(ctx: CanvasRenderingContext2D, view: View): void {
@@ -577,4 +600,61 @@ export class Renderer {
     ctx.fillStyle = COLORS.gray;
     ctx.fillText(`${km} km`, x + px + 8, y + 3);
   }
+}
+
+/** Bake a heightfield into a dark hypsometric bitmap (north-up, 4 px/cell). */
+function renderTerrainBitmap(hf: Heightfield): HTMLCanvasElement {
+  const scale = 4;
+  const w = (hf.width - 1) * scale;
+  const h = (hf.height - 1) * scale;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d')!;
+  const img = ctx.createImageData(w, h);
+  // Dark theme ramp: water stays near the map background; land climbs from
+  // deep slate to pale summit grey.
+  const stops: [number, [number, number, number]][] = [
+    [0, [13, 22, 34]],
+    [1, [24, 34, 48]],
+    [300, [37, 50, 68]],
+    [700, [58, 72, 92]],
+    [1200, [92, 104, 122]],
+    [1900, [150, 158, 172]],
+  ];
+  const shade = (elev: number): [number, number, number] => {
+    if (elev <= 0) return stops[0]![1];
+    for (let i = 1; i < stops.length; i++) {
+      if (elev <= stops[i]![0]) {
+        const [e0, c0] = stops[i - 1]!;
+        const [e1, c1] = stops[i]!;
+        const t = (elev - e0) / (e1 - e0);
+        return [0, 1, 2].map((k) => Math.round(c0[k]! + (c1[k]! - c0[k]!) * t)) as [number, number, number];
+      }
+    }
+    return stops[stops.length - 1]![1];
+  };
+  for (let py = 0; py < h; py++) {
+    for (let px = 0; px < w; px++) {
+      // Canvas y grows south; heightfield rows grow north.
+      const gx = px / scale;
+      const gy = (h - 1 - py) / scale;
+      const x0 = Math.min(hf.width - 2, Math.floor(gx));
+      const y0 = Math.min(hf.height - 2, Math.floor(gy));
+      const fx = gx - x0;
+      const fy = gy - y0;
+      const i0 = y0 * hf.width + x0;
+      const elev =
+        (hf.data[i0]! * (1 - fx) + hf.data[i0 + 1]! * fx) * (1 - fy) +
+        (hf.data[i0 + hf.width]! * (1 - fx) + hf.data[i0 + hf.width + 1]! * fx) * fy;
+      const [r, g, b] = shade(elev);
+      const o = (py * w + px) * 4;
+      img.data[o] = r;
+      img.data[o + 1] = g;
+      img.data[o + 2] = b;
+      img.data[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return canvas;
 }

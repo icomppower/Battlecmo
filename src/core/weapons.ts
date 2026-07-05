@@ -1,15 +1,19 @@
 import type { LaunchDenialReason, SimState, Unit, WeaponDef } from './types';
 import { dist2d } from './geometry';
+import { aglOf } from './terrain';
 
 /**
  * Weapons are envelopes, not a generic "attack" action: every weapon-target
  * pairing is gated by range band, target altitude band, and target domain.
  */
-export function inEnvelope(weapon: WeaponDef, shooter: Unit, target: Unit): boolean {
+export function inEnvelope(state: SimState, weapon: WeaponDef, shooter: Unit, target: Unit): boolean {
   if (!weapon.targetDomains.includes(target.domain)) return false;
   const range = dist2d(shooter.pos, target.pos);
   if (range < weapon.minRange || range > weapon.maxRange) return false;
-  if (target.pos.alt < weapon.minTargetAlt || target.pos.alt > weapon.maxTargetAlt) return false;
+  // Altitude bands are height OVER GROUND: a jet at 60 m AGL in a 200 m-MSL
+  // valley is still under a 100 m engagement floor. Flat worlds unchanged.
+  const targetAgl = aglOf(state, target);
+  if (targetAgl < weapon.minTargetAlt || targetAgl > weapon.maxTargetAlt) return false;
   return true;
 }
 
@@ -43,7 +47,7 @@ export function validateLaunch(
   if (!station || station.count <= 0) return 'NO_WEAPON';
   const roeDenial = roeAllows(state, shooter, target);
   if (roeDenial) return roeDenial;
-  if (!inEnvelope(weapon, shooter, target)) return 'OUT_OF_ENVELOPE';
+  if (!inEnvelope(state, weapon, shooter, target)) return 'OUT_OF_ENVELOPE';
   if (weapon.requiredTrackQuality !== undefined) {
     const contact = state.contacts[shooter.side][target.id];
     if (!contact || contact.quality < weapon.requiredTrackQuality) return 'NO_TRACK';
