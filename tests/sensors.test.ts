@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { canDetect, effectiveRange, jammingFactor, rcsScaledRange } from '../src/core/sensors.js';
-import { radarHorizon } from '../src/core/geometry.js';
-import { miniState, plane, radarSite } from './helpers.js';
+import { canDetect, effectiveRange, jammingFactor, rcsScaledRange } from '../src/core/sensors';
+import { radarHorizon } from '../src/core/geometry';
+import { miniState, plane, radarSite } from './helpers';
 
 describe('sensor model', () => {
   it('detection range scales with the 4th root of RCS', () => {

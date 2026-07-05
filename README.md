@@ -43,12 +43,23 @@ One BLUE strike package (2 strikers with standoff AGMs, 1 SEAD shooter with ARMs
 npm install
 npm test          # vitest
 npm run typecheck # tsc --noEmit
+npm run dev       # Executive UI (Vite dev server)
+npm run build     # static build to dist/
 ```
+
+## Executive UI (web/)
+
+CMO-style real-time/WEGO execution over the headless core — a 2D tactical map (Canvas, no framework) that imports the same `tick` the tests use.
+
+- **Time compression**: pause / 1× / 4× / 15× / 60× / single-step, on one mission clock.
+- **WEGO timeline**: every tick's state is cached, so the scrubber jumps anywhere instantly. Issuing an order while scrubbed back **rewrites the future** — cached states past the cursor are dropped and the sim recomputes forward with the amended order log. Determinism makes the untouched prefix byte-identical, so only the future changes.
+- **Orders**: click to select, right-click for waypoints (shift appends), ROE authority buttons, jammer toggle, RTB, and per-weapon engage buttons that are pre-validated against the same `validateLaunch` the sim uses (a disabled button tells you *why* — `OUT_OF_ENVELOPE`, `ROE_HOLD`, …).
+- **Sensor-honest picture**: the default view shows your package, the briefed IADS sites, assessed detection rings (including your own jamming benefit), emitter up/down state (ESM is passive), and RWR `SPIKE` warnings. RED's actual track quality on you is only visible in **TRUTH VIEW**.
 
 ## Roadmap (from the design doc's build order)
 
 1. ✅ Deterministic multi-domain tick core (headless), tested against a single strike scenario
-2. Executive Version UI on one hand-made scenario: 1 strike package vs. a static IADS
+2. ✅ Executive Version UI on one hand-made scenario: 1 strike package vs. a static IADS
 3. EW/jamming + SEAD sequencing + adaptive SAM behavior
 4. Ground extraction tie-in (Breach Protocol roster/timer import)
 5. Planning Version UI: OOB assembly, ROE authoring, mission clock sync

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { inEnvelope, validateLaunch } from '../src/core/weapons.js';
-import { WEAPONS } from '../src/scenarios/strike-basic.js';
-import { miniState, plane, radarSite } from './helpers.js';
+import { inEnvelope, validateLaunch } from '../src/core/weapons';
+import { WEAPONS } from '../src/scenarios/strike-basic';
+import { miniState, plane, radarSite } from './helpers';
 
 const sam = WEAPONS['sam-longbow']!;
 const agm = WEAPONS['agm-stormbreak']!;

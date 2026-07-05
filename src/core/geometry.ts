@@ -1,4 +1,4 @@
-import type { Vec3 } from './types.js';
+import type { Vec3 } from './types';
 
 export function dist2d(a: Vec3, b: Vec3): number {
   return Math.hypot(a.x - b.x, a.y - b.y);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { run } from '../src/core/tick.js';
-import { miniState, plane } from './helpers.js';
+import { run } from '../src/core/tick';
+import { miniState, plane } from './helpers';
 
 describe('fuel and loiter budget', () => {
   it('bingo fuel forces RTB toward home base', () => {

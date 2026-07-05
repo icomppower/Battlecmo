@@ -1,4 +1,4 @@
-import type { SimState, Unit, WeaponDef } from '../core/types.js';
+import type { SimState, Unit, WeaponDef } from '../core/types';
 
 /**
  * Reference scenario for the headless core (Build Order step 1):

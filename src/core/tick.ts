@@ -1,14 +1,14 @@
-import type { MissileEntity, Order, SimState, Unit } from './types.js';
-import { dist2d, dist3d, stepToward } from './geometry.js';
-import { roll } from './rng.js';
+import type { MissileEntity, Order, SimState, Unit } from './types';
+import { dist2d, dist3d, stepToward } from './geometry';
+import { roll } from './rng';
 import {
   TRACK_BUILD_RATE,
   TRACK_DECAY_RATE,
   TRACK_DROP_THRESHOLD,
   canDetect,
   isSuppressed,
-} from './sensors.js';
-import { validateLaunch } from './weapons.js';
+} from './sensors';
+import { validateLaunch } from './weapons';
 
 /** Pk multiplier for an anti-radiation missile whose target radar went dark. */
 const ARM_VS_SILENT_PK_FACTOR = 0.25;

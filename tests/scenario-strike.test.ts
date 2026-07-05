@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { run } from '../src/core/tick.js';
-import { buildStrikeScenario } from '../src/scenarios/strike-basic.js';
-import { goodPlan, jamOnlyPlan, naivePlan } from './plans.js';
+import { run } from '../src/core/tick';
+import { buildStrikeScenario } from '../src/scenarios/strike-basic';
+import { goodPlan, jamOnlyPlan, naivePlan } from './plans';
 
 const SEED = 42;
 const MISSION_TICKS = 700;

@@ -1,5 +1,5 @@
-import type { SensorDef, SimState, Unit } from './types.js';
-import { dist2d, dist3d, radarHorizon } from './geometry.js';
+import type { SensorDef, SimState, Unit } from './types';
+import { dist2d, dist3d, radarHorizon } from './geometry';
 
 /**
  * Sensor model — pillar 1: "you fight what your radar actually detected".

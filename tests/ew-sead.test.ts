@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { run } from '../src/core/tick.js';
-import type { Order, SimState } from '../src/core/types.js';
-import { miniState, plane, radarSite } from './helpers.js';
+import { run } from '../src/core/tick';
+import type { Order, SimState } from '../src/core/types';
+import { miniState, plane, radarSite } from './helpers';
 
 /**
  * SEAD mechanics: an inbound anti-radiation missile forces the emitter dark,

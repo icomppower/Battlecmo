@@ -1,4 +1,4 @@
-import type { Order } from '../src/core/types.js';
+import type { Order } from '../src/core/types';
 
 /**
  * Scripted mission plans against the strike-basic scenario. These are what

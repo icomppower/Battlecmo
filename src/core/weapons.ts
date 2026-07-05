@@ -1,5 +1,5 @@
-import type { LaunchDenialReason, SimState, Unit, WeaponDef } from './types.js';
-import { dist2d } from './geometry.js';
+import type { LaunchDenialReason, SimState, Unit, WeaponDef } from './types';
+import { dist2d } from './geometry';
 
 /**
  * Weapons are envelopes, not a generic "attack" action: every weapon-target

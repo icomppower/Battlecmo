@@ -1,5 +1,5 @@
-import type { SimState, Unit, WeaponDef } from '../src/core/types.js';
-import { WEAPONS } from '../src/scenarios/strike-basic.js';
+import type { SimState, Unit, WeaponDef } from '../src/core/types';
+import { WEAPONS } from '../src/scenarios/strike-basic';
 
 /** Minimal state builder for unit-level tests. */
 export function miniState(
