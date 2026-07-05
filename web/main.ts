@@ -7,6 +7,8 @@ import { buildEscalationScenario } from '../src/scenarios/strike-escalation';
 import { buildFjordScenario } from '../src/scenarios/strike-fjord';
 import {
   baitAndBlinkPlan,
+  decoyPackage,
+  decoySweepPlan,
   escalationPackage,
   escalationPlan,
   sensorWarPackage,
@@ -47,6 +49,7 @@ const PRESETS: Record<string, { plan: () => Order[]; scenario: string; pkg?: () 
   naive: { plan: naivePlan, scenario: 'strike-basic' },
   jamonly: { plan: jamOnlyPlan, scenario: 'strike-basic' },
   baitblink: { plan: baitAndBlinkPlan, scenario: 'strike-adaptive' },
+  decoysweep: { plan: decoySweepPlan, scenario: 'strike-adaptive', pkg: decoyPackage },
   rescue: { plan: rescuePlan, scenario: 'rescue-op' },
   escalation: { plan: escalationPlan, scenario: 'strike-escalation', pkg: escalationPackage },
   sensorwar: { plan: sensorWarPlan, scenario: 'strike-escalation', pkg: sensorWarPackage },
@@ -749,6 +752,13 @@ function formatEvent(e: SimEvent, state: SimState): { text: string; cls: string 
       return { text: `${name(e.unitId)} flamed out`, cls: 'red' };
     case 'JAMMER_SET':
       return { text: `${name(e.unitId)} jammer ${e.active ? 'RADIATING' : 'standby'}`, cls: 'blue' };
+    case 'CIWS_INTERCEPT': {
+      const red = state.units[e.unitId]?.side === 'RED';
+      return {
+        text: `${name(e.unitId)} CIWS ${e.killed ? 'SPLASHED inbound missile' : 'engaging inbound missile'}`,
+        cls: red ? 'red' : 'blue',
+      };
+    }
     case 'IFF_SET': {
       if (state.units[e.unitId]?.side === 'RED' && !godView) return null;
       return { text: `${name(e.unitId)} transponder ${e.on ? 'SQUAWKING' : 'SILENT — reads as a bogey'}`, cls: e.on ? 'blue' : 'warn' };

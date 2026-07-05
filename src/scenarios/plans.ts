@@ -1,5 +1,5 @@
 import type { Order } from '../core/types';
-import type { AircraftConfig } from '../oob/assembly';
+import { referencePackage, type AircraftConfig } from '../oob/assembly';
 
 /**
  * Scripted mission plans against the strike-basic scenario. These are what
@@ -300,6 +300,65 @@ export function escalationPlan(): Order[] {
     ] },
     { atTick: 500, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: -140_000, y: -3_000, alt: 8_000 }] },
     { atTick: 900, type: 'RTB', unitId: 'blue-sead-1' },
+  ];
+}
+
+/**
+ * Reference package plus two ADM-160 Shrike decoys wearing Luneburg lenses —
+ * on every radar scope in the theater they are strikers (3.0 m², strike
+ * altitude, inbound heading). Decoy economics in one number: two expendable
+ * drones against the battery's entire posture.
+ */
+export function decoyPackage(): AircraftConfig[] {
+  return [
+    ...referencePackage(),
+    {
+      id: 'blue-decoy-1',
+      callsign: 'Ghost 1',
+      airframeId: 'af-shrike',
+      stores: ['st-lens'],
+      spawn: { x: -140_000, y: -1_000, alt: 3_000 },
+      speed: 200,
+    },
+    {
+      id: 'blue-decoy-2',
+      callsign: 'Ghost 2',
+      airframeId: 'af-shrike',
+      stores: ['st-lens'],
+      spawn: { x: -140_000, y: 1_000, alt: 3_000 },
+      speed: 200,
+    },
+  ];
+}
+
+/**
+ * The decoy sweep against the ADAPTIVE battery — no SEAD shot fired at all.
+ * The Shrikes cruise into the cue ring at a believable strike profile
+ * (3 000 m — engageable, unlike the 60 m bait, so the battery not only
+ * radiates but SHOOTS). Two launches is the battery's own shoot-and-scoot
+ * trigger: it goes cold and starts its 7 km march, and the real strikers
+ * walk in through a battery that spent its posture on two drones.
+ *
+ * Timing: decoys cross the 36 km cue ring ~t=520 (104 km at 200 m/s); the
+ * battery lights and puts both missiles on them the same tick; t=521 it is
+ * relocating (radar cold, cannot shoot, ~875 ticks of march). Strikers dash
+ * from the 50 km hold at t=540, release at ~t=635 from 29 km, and the AGMs
+ * arrive around t=730 with nothing left awake to object.
+ */
+export function decoySweepPlan(): Order[] {
+  return [
+    { atTick: 0, type: 'SET_ROE', side: 'BLUE', level: 'TIGHT' },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-decoy-1', waypoints: [{ x: -20_000, y: -1_000, alt: 3_000 }] },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-decoy-2', waypoints: [{ x: -20_000, y: 1_000, alt: 3_000 }] },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: -50_000, y: -3_000, alt: 8_000 }] },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [{ x: -50_000, y: 3_000, alt: 8_000 }] },
+    // Dash once the battery has committed on the ghosts and started packing.
+    { atTick: 540, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: -27_000, y: -3_000, alt: 8_000 }] },
+    { atTick: 540, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [{ x: -27_000, y: 3_000, alt: 8_000 }] },
+    { atTick: 635, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'agm-stormbreak', targetId: 'red-hq' },
+    { atTick: 636, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'agm-stormbreak', targetId: 'red-hq' },
+    { atTick: 640, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: -140_000, y: -3_000, alt: 8_000 }] },
+    { atTick: 640, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [{ x: -140_000, y: 3_000, alt: 8_000 }] },
   ];
 }
 

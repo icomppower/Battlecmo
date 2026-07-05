@@ -22,7 +22,7 @@ export interface AirframeDef {
   id: string;
   name: string;
   /** Drives default unit-id prefixes, callsigns, and spawn posture. */
-  role: 'STRIKE' | 'SEAD' | 'EW' | 'ISR';
+  role: 'STRIKE' | 'SEAD' | 'EW' | 'ISR' | 'DECOY';
   /** Hardpoint station budget — the hard constraint stores compete for. */
   hardpoints: number;
   /** Radar cross-section with nothing hung, m². */
@@ -34,7 +34,7 @@ export interface AirframeDef {
   bingoKg: number;
 }
 
-export type StoreKind = 'WEAPON' | 'JAMMER_POD' | 'DROP_TANK' | 'SENSOR_POD';
+export type StoreKind = 'WEAPON' | 'JAMMER_POD' | 'DROP_TANK' | 'SENSOR_POD' | 'SIGNATURE';
 
 export interface StoreDef {
   id: string;
@@ -126,6 +126,20 @@ export const AIRFRAMES: Record<string, AirframeDef> = {
     internalFuelKg: 14_000,
     baseBurnKgPerTick: 1.1,
     bingoKg: 3_000,
+  },
+  'af-shrike': {
+    id: 'af-shrike',
+    name: 'ADM-160 Shrike (decoy drone)',
+    role: 'DECOY',
+    hardpoints: 1,
+    // Naked it is nearly invisible (0.4 m²); the whole point is what you
+    // hang on it. It is slow, unarmed, and expendable — its fuel load IS its
+    // mission clock, and there is no coming home (bingo 0).
+    cleanRcs: 0.4,
+    maxSpeed: 220,
+    internalFuelKg: 300,
+    baseBurnKgPerTick: 0.25,
+    bingoKg: 0,
   },
   'af-static': {
     id: 'af-static',
@@ -249,6 +263,18 @@ export const STORES: Record<string, StoreDef> = {
       minTargetSpeed: 3,
     },
   },
+  'st-lens': {
+    id: 'st-lens',
+    name: 'Luneburg lens (signature augment)',
+    kind: 'SIGNATURE',
+    stations: 1,
+    // +2.6 m² of pure reflection: on a Shrike it adds up to exactly a
+    // loaded striker's paint (3.0 m²). The radar equation cannot tell them
+    // apart — only behavior can, which is what the nemesis's decoy
+    // discrimination eventually keys on.
+    rcsAdd: 2.6,
+    burnAdd: 0,
+  },
   'st-irst': {
     id: 'st-irst',
     name: 'IRST pod (passive)',
@@ -369,6 +395,11 @@ export function defaultSpawn(role: AirframeDef['role'], index: number, packageSi
     // player's tradeoff between picture and survival.
     return { pos: { x: -120_000, y: -14_000, alt: 9_500 }, speed: 0 };
   }
+  if (role === 'DECOY') {
+    // Decoys launch ahead of the package at a believable strike altitude.
+    const y = (index - (packageSize - 1) / 2) * 6_000;
+    return { pos: { x: -135_000, y, alt: 3_000 }, speed: 200 };
+  }
   const y = (index - (packageSize - 1) / 2) * 6_000;
   return { pos: { x: -140_000, y, alt: 8_000 }, speed: 250 };
 }
@@ -401,6 +432,9 @@ export function buildAircraft(cfg: AircraftConfig, index = 0, packageSize = 1): 
     waypoints: [],
     domain: 'AIR',
     alive: true,
+    // Truth marker only — the sim flies a decoy like any aircraft; the
+    // wreckage analysis (debrief, nemesis evidence) is what reads this.
+    ...(airframe.role === 'DECOY' ? { decoy: true } : {}),
   };
 }
 

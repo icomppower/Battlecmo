@@ -31,6 +31,7 @@ export function tick(state: SimState, ordersLog: Order[], seed: number): SimStat
   applyOrders(s, ordersLog);
   moveUnitsAndBurnFuel(s);
   reactToInboundArms(s);
+  runPointDefense(s, seed);
   flyMissiles(s, seed);
   runGroundOp(s);
   updateContacts(s);
@@ -331,6 +332,30 @@ function reactToInboundArms(s: SimState): void {
         break;
       }
     }
+  }
+}
+
+/**
+ * Terminal point defense: each CIWS mount gets ONE intercept attempt per
+ * tick, against the nearest live enemy missile inside its ring — whoever
+ * that missile is aimed at. Screening geometry therefore matters: an escort
+ * only defends the ship behind it if it sits on the threat axis. Runs before
+ * missile flight so an inbound gets engaged across its whole approach, and
+ * the engagement-rate limit (not the per-attempt Pk) is what makes
+ * saturation the designed counter.
+ */
+function runPointDefense(s: SimState, seed: number): void {
+  for (const unit of sortedAliveUnits(s)) {
+    const ciws = unit.ciws;
+    if (!ciws || ciws.magazine <= 0) continue;
+    const threat = Object.values(s.missiles)
+      .filter((m) => m.alive && m.side !== unit.side && dist3d(m.pos, unit.pos) <= ciws.range)
+      .sort((a, b) => dist3d(a.pos, unit.pos) - dist3d(b.pos, unit.pos) || a.id.localeCompare(b.id))[0];
+    if (!threat) continue;
+    ciws.magazine -= 1;
+    const killed = roll(seed, s.tick, 'ciws', unit.id, threat.id) < ciws.pk;
+    if (killed) threat.alive = false;
+    s.events.push({ tick: s.tick, type: 'CIWS_INTERCEPT', unitId: unit.id, missileId: threat.id, killed });
   }
 }
 

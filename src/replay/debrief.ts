@@ -61,6 +61,10 @@ function narrate(e: SimEvent, s: SimState): string | null {
       return `${name(e.unitId)} flamed out.`;
     case 'JAMMER_SET':
       return `${name(e.unitId)} ${e.active ? 'began' : 'ceased'} standoff jamming.`;
+    case 'CIWS_INTERCEPT':
+      return e.killed
+        ? `${name(e.unitId)} point defense splashed an inbound missile.`
+        : `${name(e.unitId)} point defense engaged an inbound missile — miss.`;
     case 'IFF_SET':
       return e.on
         ? `${name(e.unitId)} squawking — transponder on.`

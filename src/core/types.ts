@@ -72,6 +72,23 @@ export interface JammerDef {
   active: boolean;
 }
 
+/**
+ * Terminal point defense (CIWS): a mount that shoots at inbound missiles,
+ * not aircraft. One intercept attempt per tick, nearest threat first, so the
+ * engagement rate — not the per-attempt Pk — is the saturation lever: a lone
+ * sea-skimmer eats every attempt of its approach; a two-missile salvo splits
+ * the mount's attention and usually leaks one. Fast missiles cross the ring
+ * in a tick or two and are nearly immune, emergently.
+ */
+export interface CiwsDef {
+  /** Engagement range against inbound missiles, meters. */
+  range: number;
+  /** Per-attempt kill probability (seeded roll, deterministic per run). */
+  pk: number;
+  /** Intercept attempts remaining — the mount is burst-limited. */
+  magazine: number;
+}
+
 /** Doctrine for how a radar crew reacts to an inbound anti-radiation missile. */
 export interface EmitterDoctrine {
   /** If an inbound ARM is detected within this range (m), shut the radar down. */
@@ -152,6 +169,15 @@ export interface Unit {
   sensors: SensorDef[];
   weapons: WeaponStation[];
   jammer?: JammerDef;
+  ciws?: CiwsDef;
+  /**
+   * Truth marker: this unit is an unmanned decoy. The sim never reads it —
+   * decoys fly, cue radars, and soak missiles through the ordinary unit
+   * machinery — but wreckage analysis does: a side that expended weapons on
+   * decoys knows it by the debrief, and the nemesis staff adapts on exactly
+   * that evidence.
+   */
+  decoy?: boolean;
   emitterDoctrine?: EmitterDoctrine;
   samDoctrine?: SamDoctrine;
   capDoctrine?: CapDoctrine;
@@ -320,6 +346,7 @@ export type SimEvent =
   | { tick: number; type: 'FUEL_EXHAUSTED'; unitId: string }
   | { tick: number; type: 'JAMMER_SET'; unitId: string; active: boolean }
   | { tick: number; type: 'IFF_SET'; unitId: string; on: boolean }
+  | { tick: number; type: 'CIWS_INTERCEPT'; unitId: string; missileId: string; killed: boolean }
   | { tick: number; type: 'ROE_SET'; side: Side; level: RoeLevel }
   | { tick: number; type: 'GROUND_PHASE'; phase: GroundPhase }
   | { tick: number; type: 'GROUND_DENIED'; order: string; reason: GroundDenialReason }

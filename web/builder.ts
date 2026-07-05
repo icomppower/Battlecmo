@@ -22,12 +22,14 @@ const ID_PREFIX: Record<AirframeDef['role'], string> = {
   SEAD: 'blue-sead-',
   EW: 'blue-ea-',
   ISR: 'blue-awacs-',
+  DECOY: 'blue-decoy-',
 };
 const CALLSIGN: Record<AirframeDef['role'], string> = {
   STRIKE: 'Hammer',
   SEAD: 'Viper',
   EW: 'Static',
   ISR: 'Watchtower',
+  DECOY: 'Ghost',
 };
 
 type DragPayload = { kind: 'airframe' | 'store'; id: string };
