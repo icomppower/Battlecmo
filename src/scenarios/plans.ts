@@ -203,6 +203,34 @@ export function escalationPackage(): AircraftConfig[] {
  *            Viper's reactive ARM forces the blink, and the AGMs release
  *            inside it.
  */
+/**
+ * ISR variant of the escalation package: the same four-ship plus Watchtower,
+ * an E-9 Sentry parked in a deep standoff orbit. Two apertures, two limits:
+ * the air-search radar sees only the air battle (245 km vs the CAP), and the
+ * GMTI radar sees only surface targets that are MOVING — the corvette under
+ * way and the SAM battery *while it displaces*, never a battery in its hide.
+ * ISR informs the hunt; it does not finish it. And the rotodome radiates all
+ * mission — the enemy's next staff read will notice (see the nemesis).
+ */
+export function sensorWarPackage(): AircraftConfig[] {
+  return [
+    ...escalationPackage(),
+    {
+      id: 'blue-awacs-1',
+      callsign: 'Watchtower',
+      airframeId: 'af-sentry',
+      stores: ['st-airsearch', 'st-gmti'],
+      spawn: { x: -120_000, y: -14_000, alt: 9_500 },
+      speed: 0,
+    },
+  ];
+}
+
+/** The escalation counter-plan flown with the ISR picture up. */
+export function sensorWarPlan(): Order[] {
+  return escalationPlan(); // Watchtower needs no orders — its orbit IS the plan
+}
+
 export function escalationPlan(): Order[] {
   return [
     { atTick: 0, type: 'SET_ROE', side: 'BLUE', level: 'TIGHT' },

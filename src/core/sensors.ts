@@ -53,6 +53,11 @@ export function effectiveRange(state: SimState, owner: Unit, sensor: SensorDef, 
   return rcsScaledRange(sensor, target.rcs);
 }
 
+/** Actual motion, not commanded speed: a unit with no waypoint is parked. */
+function targetGroundSpeed(u: Unit): number {
+  return u.waypoints.length > 0 ? u.speed : 0;
+}
+
 /** True when `owner`'s sensor suite holds `target` this tick. */
 export function canDetect(state: SimState, owner: Unit, target: Unit): boolean {
   if (!owner.alive || !target.alive) return false;
@@ -60,6 +65,10 @@ export function canDetect(state: SimState, owner: Unit, target: Unit): boolean {
   // Terrain masking blocks every sensor kind — radar, IR, and eyes alike.
   if (losBlocked(owner.pos, target.pos, state.ridges)) return false;
   for (const sensor of owner.sensors) {
+    // Sensor aperture limits: wrong-domain targets are invisible, and a
+    // GMTI-style radar cannot break out a target below its speed floor.
+    if (sensor.targetDomains && !sensor.targetDomains.includes(target.domain)) continue;
+    if (sensor.minTargetSpeed !== undefined && targetGroundSpeed(target) < sensor.minTargetSpeed) continue;
     if (range > effectiveRange(state, owner, sensor, target)) continue;
     if (sensor.kind !== 'VISUAL' && range > radarHorizon(owner.pos.alt + 5, target.pos.alt)) continue;
     return true;

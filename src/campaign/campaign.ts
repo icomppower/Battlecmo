@@ -20,6 +20,8 @@ export interface NemesisProfile {
   jamResistance: number;
   /** ARM-scare blink decay (lower ⇒ crews relight faster after scares). */
   shutdownDecay: number;
+  /** Fighters prioritize and reach for radiating surveillance aircraft. */
+  huntEmitters: boolean;
   /** Human-readable staff notes — this is the INTSUM the player reads. */
   notes: string[];
 }
@@ -42,12 +44,13 @@ export interface CampaignState {
 export function newCampaign(roster: Operator[]): CampaignState {
   return {
     missionNumber: 1,
-    nemesis: { cueMinAlt: 0, jamResistance: 0, shutdownDecay: 0.5, notes: [] },
+    nemesis: { cueMinAlt: 0, jamResistance: 0, shutdownDecay: 0.5, huntEmitters: false, notes: [] },
     squadron: [
       { unitId: 'blue-striker-1', pilot: 'CAPT Vega', missions: 0, fatigue: 0, status: 'READY' },
       { unitId: 'blue-striker-2', pilot: 'LT Brandt', missions: 0, fatigue: 0, status: 'READY' },
       { unitId: 'blue-sead-1', pilot: 'MAJ Osei', missions: 0, fatigue: 0, status: 'READY' },
       { unitId: 'blue-ea-1', pilot: 'LT Ito', missions: 0, fatigue: 0, status: 'READY' },
+      { unitId: 'blue-awacs-1', pilot: 'CDR Halevy', missions: 0, fatigue: 0, status: 'READY' },
     ],
     roster,
   };
@@ -65,6 +68,9 @@ export function applyNemesisDoctrine(state: SimState, nemesis: NemesisProfile): 
     }
     if (unit.emitterDoctrine) {
       unit.emitterDoctrine.shutdownDecay = nemesis.shutdownDecay;
+    }
+    if (unit.capDoctrine) {
+      unit.capDoctrine.huntEmitters = nemesis.huntEmitters;
     }
   }
   return state;
@@ -103,6 +109,29 @@ export function adaptNemesis(nemesis: NemesisProfile, final: SimState): NemesisP
     next.shutdownDecay = 0.35;
     next.notes.push(
       'Crews survived anti-radiation shots by blinking — drilled to relight faster after each scare.',
+    );
+  }
+
+  // ELINT correlates a persistent airborne surveillance radar. Emissions
+  // travel one way: if a BLUE airborne radar painted RED units (BLUE
+  // DETECTION events credited to a radar-emitting aircraft), RED's ELINT
+  // heard that radar — jamming its receivers doesn't silence its own
+  // transmitter. Passive tracks (IRST) leave no such fingerprint.
+  const radiatedAtRed = events.some((e) => {
+    if (e.type !== 'DETECTION' || e.side !== 'BLUE') return false;
+    const sensorUnit = final.units[e.sensorUnitId];
+    return (
+      sensorUnit?.side === 'BLUE' &&
+      sensorUnit.domain === 'AIR' &&
+      sensorUnit.sensors.some((se) => se.kind === 'RADAR' && se.emitting)
+    );
+  });
+  if (radiatedAtRed && !next.huntEmitters) {
+    next.huntEmitters = true;
+    next.notes.push(
+      'ELINT correlated a persistent airborne surveillance radar behind the strike — ' +
+        'interceptors re-tasked: radiating command-and-surveillance aircraft are now priority targets, ' +
+        'engaged well beyond the normal commit ring.',
     );
   }
 

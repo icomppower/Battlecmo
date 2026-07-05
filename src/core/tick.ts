@@ -433,7 +433,23 @@ function runCapDoctrine(s: SimState): void {
       (a, b) => b.quality - a.quality || a.targetId.localeCompare(b.targetId),
     );
     let target: Unit | null = null;
-    for (const contact of contacts) {
+
+    // Nemesis emitter hunt: a radiating surveillance aircraft is priority
+    // one, and the fighter reaches for it well beyond the normal ring.
+    if (doctrine.huntEmitters) {
+      const ring = doctrine.emitterCommitRange ?? doctrine.commitRange * 1.6;
+      for (const contact of contacts) {
+        const t = s.units[contact.targetId];
+        if (!t?.alive || t.domain !== 'AIR') continue;
+        if (t.pos.alt < (doctrine.commitMinAlt ?? 0)) continue;
+        if (!t.sensors.some((se) => se.kind === 'RADAR' && se.emitting)) continue;
+        if (dist2d(doctrine.station, t.pos) > ring) continue;
+        target = t;
+        break;
+      }
+    }
+
+    for (const contact of target ? [] : contacts) {
       const t = s.units[contact.targetId];
       if (!t?.alive || t.domain !== 'AIR') continue;
       if (t.pos.alt < (doctrine.commitMinAlt ?? 0)) continue;

@@ -22,7 +22,7 @@ export interface AirframeDef {
   id: string;
   name: string;
   /** Drives default unit-id prefixes, callsigns, and spawn posture. */
-  role: 'STRIKE' | 'SEAD' | 'EW';
+  role: 'STRIKE' | 'SEAD' | 'EW' | 'ISR';
   /** Hardpoint station budget — the hard constraint stores compete for. */
   hardpoints: number;
   /** Radar cross-section with nothing hung, m². */
@@ -113,6 +113,19 @@ export const AIRFRAMES: Record<string, AirframeDef> = {
     internalFuelKg: 5_200,
     baseBurnKgPerTick: 1.2,
     bingoKg: 1_800,
+  },
+  'af-sentry': {
+    id: 'af-sentry',
+    name: 'E-9 Sentry (ISR)',
+    role: 'ISR',
+    hardpoints: 2,
+    // A rotodome the size of a barn: everything on the other side sees it
+    // at range, and it cannot shoot back. Orbit geometry is its armor.
+    cleanRcs: 20,
+    maxSpeed: 180,
+    internalFuelKg: 14_000,
+    baseBurnKgPerTick: 1.1,
+    bingoKg: 3_000,
   },
   'af-static': {
     id: 'af-static',
@@ -205,6 +218,36 @@ export const STORES: Record<string, StoreDef> = {
     burnAdd: 0.12,
     weaponId: 'asm-pike',
     rounds: 1,
+  },
+  'st-airsearch': {
+    id: 'st-airsearch',
+    name: 'AN/APY air-search radar',
+    kind: 'SENSOR_POD',
+    stations: 1,
+    rcsAdd: 0,
+    burnAdd: 0.05,
+    // Long-range air picture only — a surveillance radar tuned for the air
+    // battle cannot break out surface targets at all.
+    sensor: { kind: 'RADAR', baseRange: 260_000, refRcs: 5, emitting: true, targetDomains: ['AIR'] },
+  },
+  'st-gmti': {
+    id: 'st-gmti',
+    name: 'GMTI/SAR surveillance radar',
+    kind: 'SENSOR_POD',
+    stations: 1,
+    rcsAdd: 0,
+    burnAdd: 0.05,
+    // Ground/sea moving-target indication: it catches a battery *displacing*
+    // or a ship under way, never a unit parked in its hide — ISR informs the
+    // hunt, it does not finish it.
+    sensor: {
+      kind: 'RADAR',
+      baseRange: 120_000,
+      refRcs: 5,
+      emitting: true,
+      targetDomains: ['GROUND', 'SEA'],
+      minTargetSpeed: 3,
+    },
   },
   'st-irst': {
     id: 'st-irst',
@@ -320,6 +363,11 @@ export const HOME_BASE: Vec3 = { x: -160_000, y: 0, alt: 0 };
 export function defaultSpawn(role: AirframeDef['role'], index: number, packageSize: number): { pos: Vec3; speed: number } {
   if (role === 'EW') {
     return { pos: { x: -110_000, y: 12_000, alt: 10_000 }, speed: 0 };
+  }
+  if (role === 'ISR') {
+    // Surveillance orbits stage deep and safe; where to push them is the
+    // player's tradeoff between picture and survival.
+    return { pos: { x: -120_000, y: -14_000, alt: 9_500 }, speed: 0 };
   }
   const y = (index - (packageSize - 1) / 2) * 6_000;
   return { pos: { x: -140_000, y, alt: 8_000 }, speed: 250 };

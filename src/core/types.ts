@@ -27,6 +27,15 @@ export interface SensorDef {
   refRcs: number;
   /** Radars can be switched off (EMCON / SEAD reaction); passive sensors are always on. */
   emitting: boolean;
+  /** Domains this sensor can detect at all (absent = every domain). */
+  targetDomains?: Domain[];
+  /**
+   * Moving-target-indication floor, m/s: targets slower than this are
+   * invisible to this sensor (GMTI clutter rejection). This is what keeps
+   * ISR honest — a surveillance radar catches a battery *displacing*, never
+   * a battery sitting quietly in its hide.
+   */
+  minTargetSpeed?: number;
 }
 
 export type WeaponKind = 'SAM' | 'AGM' | 'ARM' | 'AAM' | 'ASM';
@@ -119,6 +128,14 @@ export interface CapDoctrine {
   commitMinAlt?: number;
   cruiseSpeed: number;
   dashSpeed: number;
+  /**
+   * Nemesis counter to ISR orbits: prioritize air contacts that are
+   * radiating a radar, and commit on them out to emitterCommitRange
+   * (default 1.6 × commitRange). The surveillance aircraft that lit up the
+   * whole IADS picture becomes the fighter's first target.
+   */
+  huntEmitters?: boolean;
+  emitterCommitRange?: number;
 }
 
 export interface Unit {

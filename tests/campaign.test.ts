@@ -31,8 +31,12 @@ describe('nemesis IADS + persistent squadron (build order step 6)', () => {
     expect(campaign.nemesis.shutdownDecay).toBeCloseTo(0.35);
     expect(campaign.nemesis.notes.length).toBeGreaterThanOrEqual(3);
 
-    // Squadron bookkeeping: everyone flew, everyone came home.
-    expect(campaign.squadron.every((a) => a.status === 'READY' && a.missions === 1)).toBe(true);
+    // Squadron bookkeeping: everyone who flew came home and logged the
+    // sortie; airframes not in this mission's package (the AWACS) stay put.
+    const flew = campaign.squadron.filter((a) => a.unitId in m1.units);
+    expect(flew.length).toBeGreaterThanOrEqual(4);
+    expect(flew.every((a) => a.status === 'READY' && a.missions === 1)).toBe(true);
+    expect(campaign.squadron.every((a) => a.status === 'READY')).toBe(true);
     // Ground roster logged the sortie (KIA would be frozen).
     expect(campaign.roster.every((o) => o.missions >= 5)).toBe(true);
 

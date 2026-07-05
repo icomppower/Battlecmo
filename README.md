@@ -112,6 +112,12 @@ CMO-style real-time/WEGO execution over the headless core — a 2D tactical map 
 
 Post-v0.1 additions: air-to-air (AAM/CAP), naval domain (corvette + anti-ship missile), terrain masking (ridge LOS), confidence-graded intel dossier, campaign UI with squadron fatigue effects. Remaining future work: full-fidelity ground combat (deliberately parked in the design doc).
 
+## ISR & the sensor war (src/oob — af-sentry; tests/isr.test.ts)
+
+BLUE finally owns a real sensor picture: the E-9 Sentry (`af-sentry`) carries two apertures with designed limits — an air-search radar that sees only the air battle (245 km vs the CAP from tick 0), and a GMTI/SAR radar that sees only surface targets that are **moving** (`minTargetSpeed`). A battery parked in its hide stays invisible; a battery *displacing* after its salvo lights up for exactly the length of its march (`tests/isr.test.ts` pins the detection to the scoot window). ISR informs the hunt; it does not finish it.
+
+The nemesis answers in kind: a surveillance radar that painted RED units is a one-way broadcast — ELINT hears it even through BLUE's own jamming — and the next mission's CAP flies **emitter hunt** doctrine, committing on radiating aircraft out to 1.6× its normal ring. A forward orbit dies at tick 0 and takes the air picture with it; a standoff orbit survives and keeps the whole picture. Passive IRST tracks leave no fingerprint, so the passive-escort play stays viable. Load the `sensor war` preset to fly it.
+
 ## 3D replay — phase 1 (web/replay3d.ts)
 
 A read-only Three.js view over the same recorded states the 2D map and scrubber use — no orders, no picking, no separate simulation, and the `three` bundle loads lazily only when the **3D** toggle is hit. Terrain ridges are extruded to their real footprint with ×6 vertical exaggeration (applied equally to unit altitudes, so "under the radar" reads on screen), engagement rings live on the ground plane and grey out when the emitter is down, and two camera families ship: an auto-orbiting overview that follows the action, and per-aircraft chase cams. The deck run is the money shot: chase Hammer 2 through the Koro corridor at 60 m with the lit rock face towering to starboard and the SAM ring waiting on the far side.

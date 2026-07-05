@@ -8,6 +8,8 @@ import {
   baitAndBlinkPlan,
   escalationPackage,
   escalationPlan,
+  sensorWarPackage,
+  sensorWarPlan,
   goodPlan,
   jamOnlyPlan,
   naivePlan,
@@ -44,6 +46,7 @@ const PRESETS: Record<string, { plan: () => Order[]; scenario: string; pkg?: () 
   baitblink: { plan: baitAndBlinkPlan, scenario: 'strike-adaptive' },
   rescue: { plan: rescuePlan, scenario: 'rescue-op' },
   escalation: { plan: escalationPlan, scenario: 'strike-escalation', pkg: escalationPackage },
+  sensorwar: { plan: sensorWarPlan, scenario: 'strike-escalation', pkg: sensorWarPackage },
 };
 
 /**
@@ -157,6 +160,7 @@ try {
     const saved = JSON.parse(raw) as { campaign?: CampaignState; campaignApplied?: boolean };
     if (saved?.campaign?.squadron && saved.campaign.nemesis) {
       campaign = saved.campaign;
+      campaign.nemesis.huntEmitters ??= false; // migrate pre-ISR saves
       campaignApplied = !!saved.campaignApplied;
     }
   }
