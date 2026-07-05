@@ -1,5 +1,5 @@
 import type { SensorDef, SimState, Unit } from './types';
-import { dist2d, dist3d, radarHorizon } from './geometry';
+import { dist2d, dist3d, losBlocked, radarHorizon } from './geometry';
 
 /**
  * Sensor model — pillar 1: "you fight what your radar actually detected".
@@ -57,6 +57,8 @@ export function effectiveRange(state: SimState, owner: Unit, sensor: SensorDef, 
 export function canDetect(state: SimState, owner: Unit, target: Unit): boolean {
   if (!owner.alive || !target.alive) return false;
   const range = dist2d(owner.pos, target.pos);
+  // Terrain masking blocks every sensor kind — radar, IR, and eyes alike.
+  if (losBlocked(owner.pos, target.pos, state.ridges)) return false;
   for (const sensor of owner.sensors) {
     if (range > effectiveRange(state, owner, sensor, target)) continue;
     if (sensor.kind !== 'VISUAL' && range > radarHorizon(owner.pos.alt + 5, target.pos.alt)) continue;

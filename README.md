@@ -90,7 +90,15 @@ CMO-style real-time/WEGO execution over the headless core — a 2D tactical map 
 - **Orders**: click to select, right-click for waypoints (shift appends), ROE authority buttons, jammer toggle, RTB, ground-op phase buttons, and per-weapon engage buttons that are pre-validated against the same `validateLaunch` the sim uses (a disabled button tells you *why* — `OUT_OF_ENVELOPE`, `ROE_HOLD`, …).
 - **Planner (step 5)**: the order log *is* the plan. Load a preset (every plan from the test suite), author orders with a time offset ("issue at now + N s"), delete scheduled orders — deleting one invalidates only the cached future from its tick — and **RUN ►►** scrubs the whole plan to the end instantly for review on the timeline.
 - **Mission Builder (OOB/loadout assembly)**: drag airframes from the hangar into the strike package and stores from the armory onto each jet's hardpoints. Loadouts are tradeoffs, not upgrades — every store costs stations, adds RCS (priced by the same radar equation the IADS uses), and adds drag against the bingo-fuel clock; the builder shows the computed numbers live and refuses to commit an overloaded wing. The committed package is swapped into any scenario via the pure `withBluePackage`, and the standard package reproduces the hand-built scenarios **byte-for-byte** (locked in by test), so the assembly path and the scripted path are provably the same sim.
-- **Sensor-honest picture**: the default view shows your package, the briefed IADS sites, assessed detection rings (including your own jamming benefit), emitter up/down state (ESM is passive), and RWR `SPIKE` warnings. RED's actual track quality on you is only visible in **TRUTH VIEW**.
+- **Sensor-honest picture**: the default view shows your package, the briefed IADS sites, assessed detection rings (including your own jamming benefit), emitter up/down state (ESM is passive), and RWR `SPIKE` warnings. RED units you neither track nor were briefed on aren't plotted at all; APPROX/CONTESTED dossier ghosts wear dashed uncertainty rings until a sensor finds the real thing. RED's actual track quality on you is only visible in **TRUTH VIEW**.
+- **Intel dossier**: every scenario ships a confidence-graded briefing (`VERIFIED`/`APPROX`/`CONTESTED` chips in the side panel). The grades are honest: the escalation scenario's CONTESTED ELINT fix on the enemy fighter is 17 km wrong, and the APPROX corvette has patrolled off its 6-hour-old fix by the time you get there.
+- **Campaign**: fly a mission to its end, then **DEBRIEF & ADVANCE** — the nemesis IADS staff reads the engagement log and re-tunes doctrine (legible staff notes, every adaptation keyed to evidence you generated), your airframes log sorties and fatigue (tired pilots burn +4%/sortie more fuel), lost airframes stay lost, and the ground roster carries wounds forward. The next mission reset flies against the adapted world.
+
+## Domains & terrain (post-v0.1)
+
+- **Air-to-air**: `AAM` weapons with engagement floors; interceptors auto-engage through the same `validateLaunch`/ROE gates as SAMs. The `strike-escalation` scenario posts a QRA fighter on CAP over the ingress lane — counter it with a passive IRST + AAM self-escort loadout from the Mission Builder (the kill track is built without radiating), or stay below its 100 m floor.
+- **Naval (SEA domain)**: a missile corvette patrols the littoral with its own SAM ring; the `asm-pike` anti-ship missile kills it from standoff on the dossier's stale fix. Weapons envelopes were domain-generic from day one — the SEA domain is data, not new engine code.
+- **Terrain masking**: ridge crest segments block line of sight for every sensor kind (deterministic segment-intersection geometry, drawn on the map). The escalation scenario's Koro ridge shelters a deck-level corridor from the whole IADS — but not from the fighter looking down, and the corvette patrols the same side of the crest.
 
 ## Roadmap (from the design doc's build order)
 
@@ -99,5 +107,7 @@ CMO-style real-time/WEGO execution over the headless core — a 2D tactical map 
 3. ✅ EW/jamming + SEAD sequencing + adaptive SAM behavior (EMCON, shoot-and-scoot, ARM-scare adaptation)
 4. ✅ Ground extraction tie-in (Breach Protocol roster import, hostage clock, breach gating, MANPADS-vs-helo exfil)
 5. ✅ Planning Version UI (order-log authoring, presets, timed orders, run-to-end scrubbing, drag-and-drop OOB/loadout assembly)
-6. ✅ Nemesis IADS adaptation + persistent squadron roster (headless campaign module, fully tested)
+6. ✅ Nemesis IADS adaptation + persistent squadron roster (campaign module + in-game CAMPAIGN screen with between-mission debrief)
 7. ✅ Cinematic replay & debrief (auto-camera replay + narrated INTSUM with intercept chatter; the 3D battle-documentary engine fork remains future work)
+
+Post-v0.1 additions: air-to-air (AAM/CAP), naval domain (corvette + anti-ship missile), terrain masking (ridge LOS), confidence-graded intel dossier, campaign UI with squadron fatigue effects. Remaining future work: the real-terrain 3D visualization fork and full-fidelity ground combat (both deliberately parked in the design doc).

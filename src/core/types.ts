@@ -29,7 +29,7 @@ export interface SensorDef {
   emitting: boolean;
 }
 
-export type WeaponKind = 'SAM' | 'AGM' | 'ARM' | 'AAM';
+export type WeaponKind = 'SAM' | 'AGM' | 'ARM' | 'AAM' | 'ASM';
 
 export interface WeaponDef {
   id: string;
@@ -173,6 +173,41 @@ export interface Contact {
  */
 export type RoeLevel = 'HOLD' | 'TIGHT' | 'FREE';
 
+/**
+ * A terrain ridge: a vertical crest segment that masks line of sight passing
+ * below its height. Terrain masking is deterministic geometry, same as the
+ * rest of the sensor model — a corridor behind a ridge is knowable in the
+ * planning layer, not discovered by dying.
+ */
+export interface Ridge {
+  id: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  /** Crest height, meters AGL. */
+  height: number;
+}
+
+/**
+ * Intel dossier confidence — the briefing model from the design doc.
+ * VERIFIED: the dossier position is truth at mission start. APPROX: real
+ * site, position uncertain (patrolling/relocatable). CONTESTED: single-source
+ * ELINT; the site may not be where the dossier puts it at all.
+ */
+export type IntelConfidence = 'VERIFIED' | 'APPROX' | 'CONTESTED';
+
+export interface IntelEntry {
+  unitId: string;
+  confidence: IntelConfidence;
+  /** Where the dossier places it — may be wrong for APPROX/CONTESTED. */
+  briefedPos: Vec3;
+  /** Uncertainty radius for the planning map, meters. */
+  uncertaintyRadius?: number;
+  /** One-line analyst note shown in the dossier panel. */
+  note?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Ground extraction layer (build order step 4) — the Breach Protocol tie-in.
 // The ground team is imported as a roster, runs a phase machine on the same
@@ -279,4 +314,8 @@ export interface SimState {
   weaponCatalog: Record<string, WeaponDef>;
   /** Present when the mission carries a ground extraction op. */
   groundOp?: GroundOp;
+  /** Terrain ridges that mask line of sight (empty/absent = flat world). */
+  ridges?: Ridge[];
+  /** BLUE's confidence-graded intel dossier, keyed by RED unit id. */
+  intel?: Record<string, IntelEntry>;
 }

@@ -7,6 +7,7 @@ export * from './core/tick';
 export { buildStrikeScenario, WEAPONS } from './scenarios/strike-basic';
 export { buildAdaptiveStrikeScenario } from './scenarios/strike-adaptive';
 export { buildRescueScenario } from './scenarios/rescue-op';
+export { buildEscalationScenario } from './scenarios/strike-escalation';
 export { BREACH_ROSTER, importRoster } from './scenarios/breach-roster';
 export * from './scenarios/plans';
 export * from './oob/assembly';

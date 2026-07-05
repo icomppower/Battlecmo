@@ -535,7 +535,9 @@ function runDefensiveEngagements(s: SimState): void {
 
       for (const station of unit.weapons) {
         const weapon = s.weaponCatalog[station.weaponId];
-        if (!weapon || weapon.kind !== 'SAM') continue;
+        // SAMs and AAMs are defensive-fire weapons (batteries and interceptors);
+        // strike weapons only ever fire on explicit ENGAGE orders.
+        if (!weapon || (weapon.kind !== 'SAM' && weapon.kind !== 'AAM')) continue;
         if (validateLaunch(s, unit, weapon, target) === null) {
           launch(s, unit, weapon.id, target.id);
           inFlight += 1;

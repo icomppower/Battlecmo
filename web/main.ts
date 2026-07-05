@@ -3,8 +3,11 @@ import { validateLaunch } from '../src/core/weapons';
 import { buildStrikeScenario } from '../src/scenarios/strike-basic';
 import { buildAdaptiveStrikeScenario } from '../src/scenarios/strike-adaptive';
 import { buildRescueScenario } from '../src/scenarios/rescue-op';
+import { buildEscalationScenario } from '../src/scenarios/strike-escalation';
 import {
   baitAndBlinkPlan,
+  escalationPackage,
+  escalationPlan,
   goodPlan,
   jamOnlyPlan,
   naivePlan,
@@ -12,6 +15,14 @@ import {
 } from '../src/scenarios/plans';
 import { generateDebrief } from '../src/replay/debrief';
 import { withBluePackage, type AircraftConfig } from '../src/oob/assembly';
+import {
+  applyNemesisDoctrine,
+  applySquadronState,
+  debriefCampaign,
+  newCampaign,
+  type CampaignState,
+} from '../src/campaign/campaign';
+import { importRoster } from '../src/scenarios/breach-roster';
 import type { Order, RoeLevel, SimEvent, SimState, Vec3 } from '../src/core/types';
 import { Renderer, type View } from './render';
 import { initBuilder } from './builder';
@@ -23,14 +34,16 @@ const SCENARIOS: Record<string, () => SimState> = {
   'strike-basic': buildStrikeScenario,
   'strike-adaptive': buildAdaptiveStrikeScenario,
   'rescue-op': buildRescueScenario,
+  'strike-escalation': buildEscalationScenario,
 };
 
-const PRESETS: Record<string, { plan: () => Order[]; scenario: string }> = {
+const PRESETS: Record<string, { plan: () => Order[]; scenario: string; pkg?: () => AircraftConfig[] }> = {
   good: { plan: goodPlan, scenario: 'strike-basic' },
   naive: { plan: naivePlan, scenario: 'strike-basic' },
   jamonly: { plan: jamOnlyPlan, scenario: 'strike-basic' },
   baitblink: { plan: baitAndBlinkPlan, scenario: 'strike-adaptive' },
   rescue: { plan: rescuePlan, scenario: 'rescue-op' },
+  escalation: { plan: escalationPlan, scenario: 'strike-escalation', pkg: escalationPackage },
 };
 
 /**
@@ -97,10 +110,19 @@ class Timeline {
     this.cursor = 0;
   }
 
-  /** Intel-dossier positions of RED ground sites (mission-start truth). */
+  /**
+   * Dossier positions for RED sites. With a confidence-graded dossier the
+   * briefed fixes come from it verbatim (including the wrong ones); the
+   * pre-dossier fallback is mission-start truth for ground sites.
+   */
   briefedPositions(): Record<string, Vec3> {
+    const s0 = this.states[0]!;
     const out: Record<string, Vec3> = {};
-    for (const u of Object.values(this.states[0]!.units)) {
+    if (s0.intel) {
+      for (const entry of Object.values(s0.intel)) out[entry.unitId] = entry.briefedPos;
+      return out;
+    }
+    for (const u of Object.values(s0.units)) {
       if (u.side === 'RED' && u.domain !== 'AIR') out[u.id] = u.pos;
     }
     return out;
@@ -112,11 +134,34 @@ class Timeline {
 /** Committed Mission Builder package; null flies the scenario's stock OOB. */
 let packageConfigs: AircraftConfig[] | null = null;
 
-/** Scenario builder with the committed package (if any) swapped in. */
+/**
+ * Campaign state: the nemesis IADS commander and the persistent squadron.
+ * Effects apply to scenario builds once the first mission has been debriefed
+ * — mission 1 is always flown against doctrine as briefed.
+ */
+let campaign: CampaignState = newCampaign(importRoster());
+let campaignApplied = false;
+
+/**
+ * Scenario builder with the committed package (if any) swapped in and, once
+ * a campaign debrief has run, the nemesis doctrine + squadron wear applied.
+ */
 function scenarioBuild(name: string): () => SimState {
   const base = SCENARIOS[name]!;
   const configs = packageConfigs;
-  return configs ? () => withBluePackage(base(), configs) : base;
+  const applyCampaign = campaignApplied;
+  const nemesis = campaign.nemesis;
+  const squadron = campaign.squadron;
+  const roster = campaign.roster;
+  return () => {
+    let s = name === 'rescue-op' && applyCampaign ? buildRescueScenario(roster) : base();
+    if (configs) s = withBluePackage(s, configs);
+    if (applyCampaign) {
+      s = applyNemesisDoctrine(s, nemesis);
+      s = applySquadronState(s, squadron);
+    }
+    return s;
+  };
 }
 
 const timeline = new Timeline(SCENARIOS['strike-basic']!);
@@ -264,12 +309,15 @@ scenarioSelect.addEventListener('change', () => {
   speed = 0;
 });
 
-initBuilder((configs) => {
-  packageConfigs = configs;
-  timeline.reset(scenarioBuild(scenarioSelect.value));
-  selectedId = null;
-  speed = 0;
-});
+initBuilder(
+  (configs) => {
+    packageConfigs = configs;
+    timeline.reset(scenarioBuild(scenarioSelect.value));
+    selectedId = null;
+    speed = 0;
+  },
+  (unitId) => campaign.squadron.find((r) => r.unitId === unitId && r.status === 'READY')?.pilot,
+);
 
 document.getElementById('replay')!.addEventListener('click', () => {
   timeline.scrub(0);
@@ -296,6 +344,8 @@ presetSelect.addEventListener('change', () => {
   const preset = PRESETS[presetSelect.value];
   if (!preset) return;
   scenarioSelect.value = preset.scenario;
+  // Presets that need a specific force composition bring their package.
+  if (preset.pkg) packageConfigs = preset.pkg();
   timeline.reset(scenarioBuild(preset.scenario));
   timeline.orders = preset.plan();
   selectedId = null;
@@ -381,6 +431,79 @@ function renderGroundPanel(state: SimState): string {
       `</div>`,
   ];
   return rows.join('');
+}
+
+// ---- intel dossier panel ----------------------------------------------------------
+
+function renderDossier(state: SimState): string {
+  const intel = timeline.states[0]!.intel;
+  if (!intel) return '';
+  const chip = (c: string) =>
+    `<span class="conf ${c.toLowerCase()}">${c}</span>`;
+  const rows = Object.values(intel).map((e) => {
+    const unit = state.units[e.unitId];
+    const dead = unit && !unit.alive;
+    const tracked = !!state.contacts.BLUE[e.unitId];
+    const status = dead ? ' <span style="color:var(--dim)">✝ destroyed</span>' : tracked ? ' <span style="color:var(--blue)">tracking</span>' : '';
+    return (
+      `<div class="intel${dead ? ' dead' : ''}">` +
+      `<div>${chip(e.confidence)} <b>${esc(unit?.name ?? e.unitId)}</b>${status}</div>` +
+      (e.note ? `<div class="note">${esc(e.note)}</div>` : '') +
+      `</div>`
+    );
+  });
+  return `<h3>Intel dossier</h3>${rows.join('')}`;
+}
+
+// ---- campaign panel ----------------------------------------------------------
+
+const campaignOverlay = document.getElementById('campaignoverlay')!;
+document.getElementById('campaignopen')!.addEventListener('click', () => {
+  renderCampaign();
+  campaignOverlay.classList.add('open');
+});
+document.getElementById('campaignclose')!.addEventListener('click', () => {
+  campaignOverlay.classList.remove('open');
+});
+
+document.getElementById('campaignadvance')!.addEventListener('click', () => {
+  // Debrief the mission as flown to the end of the recorded timeline: the
+  // nemesis reads the log, the squadron logs sorties/losses, the roster
+  // carries forward. The next reset flies against the adapted world.
+  const final = timeline.states[timeline.states.length - 1]!;
+  campaign = debriefCampaign(campaign, final);
+  campaignApplied = true;
+  timeline.reset(scenarioBuild(scenarioSelect.value));
+  selectedId = null;
+  speed = 0;
+  renderCampaign();
+  document.getElementById('campaignopen')!.classList.add('on');
+});
+
+function renderCampaign(): void {
+  const notes = campaign.nemesis.notes.length
+    ? campaign.nemesis.notes.map((n) => `<div class="note">▸ ${esc(n)}</div>`).join('')
+    : '<div class="note" style="color:var(--dim)">No adaptations yet — the enemy fights as briefed.</div>';
+  const sq = campaign.squadron
+    .map(
+      (r) =>
+        `<div class="row"><span class="k">${esc(r.pilot)} <span style="color:var(--dim)">(${r.unitId})</span></span>` +
+        `<span>${r.status === 'LOST' ? '<span style="color:var(--red)">LOST</span>' : `${r.missions} sorties · fatigue ${r.fatigue}`}</span></div>`,
+    )
+    .join('');
+  const roster = campaign.roster
+    .map(
+      (o) =>
+        `<div class="row"><span class="k">${esc(o.name)}</span>` +
+        `<span>${o.status === 'KIA' ? '<span style="color:var(--red)">KIA</span>' : `${o.status} · ${o.missions} msn`}</span></div>`,
+    )
+    .join('');
+  document.getElementById('campaignbody')!.innerHTML =
+    `<div class="row"><span class="k">mission</span><span>#${campaign.missionNumber}</span></div>` +
+    `<div class="row"><span class="k">campaign effects</span><span>${campaignApplied ? 'APPLIED (doctrine adapted, wear carried)' : 'not yet — mission 1 as briefed'}</span></div>` +
+    `<h3 style="margin-top:12px;">Enemy staff notes (INTSUM)</h3>${notes}` +
+    `<h3 style="margin-top:12px;">Squadron</h3>${sq}` +
+    `<h3 style="margin-top:12px;">Ground roster</h3>${roster}`;
 }
 
 // ---- scrubber ----------------------------------------------------------
@@ -647,6 +770,7 @@ function frame(now: number): void {
     selectedId,
     briefedRcs: 3,
     briefedPositions: timeline.briefedPositions(),
+    intel: timeline.states[0]!.intel ?? null,
     lz: state.groundOp?.lz ?? null,
   });
 
@@ -688,6 +812,10 @@ function frame(now: number): void {
     const groundHtml = renderGroundPanel(state);
     groundPanel.innerHTML = groundHtml;
     (groundPanel as HTMLElement).style.display = groundHtml ? 'block' : 'none';
+    const dossierHtml = renderDossier(state);
+    const dossierPanel = document.getElementById('dossierpanel')!;
+    dossierPanel.innerHTML = dossierHtml;
+    dossierPanel.style.display = dossierHtml ? 'block' : 'none';
   }
 
   // Event log — rebuild when events (or view filter) change.

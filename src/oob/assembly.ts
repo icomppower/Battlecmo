@@ -1,4 +1,4 @@
-import type { JammerDef, SimState, Unit, Vec3, WeaponStation } from '../core/types';
+import type { JammerDef, SensorDef, SimState, Unit, Vec3, WeaponDef, WeaponStation } from '../core/types';
 
 /**
  * Order-of-battle & loadout assembly (the Planning Version's force-composition
@@ -34,7 +34,7 @@ export interface AirframeDef {
   bingoKg: number;
 }
 
-export type StoreKind = 'WEAPON' | 'JAMMER_POD' | 'DROP_TANK';
+export type StoreKind = 'WEAPON' | 'JAMMER_POD' | 'DROP_TANK' | 'SENSOR_POD';
 
 export interface StoreDef {
   id: string;
@@ -53,7 +53,43 @@ export interface StoreDef {
   jammer?: Omit<JammerDef, 'active'>;
   /** DROP_TANK: fuel added, kg. */
   fuelKg?: number;
+  /** SENSOR_POD: the sensor this pod provides (id is derived per aircraft). */
+  sensor?: Omit<SensorDef, 'id'>;
 }
+
+/**
+ * Weapons that exist only as package stores (not in every scenario's base
+ * catalog). withBluePackage merges the ones the package actually carries
+ * into the scenario's weapon catalog, so a self-escort or anti-ship loadout
+ * works in any mission.
+ */
+export const STORE_WEAPONS: Record<string, WeaponDef> = {
+  'aam-dart': {
+    id: 'aam-dart',
+    name: 'AAM-4 Dart',
+    kind: 'AAM',
+    minRange: 1_000,
+    maxRange: 40_000,
+    minTargetAlt: 50,
+    maxTargetAlt: 20_000,
+    speed: 900,
+    pk: 0.7,
+    targetDomains: ['AIR'],
+    requiredTrackQuality: 0.4,
+  },
+  'asm-pike': {
+    id: 'asm-pike',
+    name: 'ASM-12 Pike',
+    kind: 'ASM',
+    minRange: 8_000,
+    maxRange: 80_000,
+    minTargetAlt: 0,
+    maxTargetAlt: 60,
+    speed: 250,
+    pk: 0.8,
+    targetDomains: ['SEA'],
+  },
+};
 
 export const AIRFRAMES: Record<string, AirframeDef> = {
   'af-ranger': {
@@ -150,6 +186,37 @@ export const STORES: Record<string, StoreDef> = {
     burnAdd: 0.05,
     fuelKg: 1_200,
   },
+  'st-aam-2': {
+    id: 'st-aam-2',
+    name: 'AAM-4 Dart ×2 rack',
+    kind: 'WEAPON',
+    stations: 1,
+    rcsAdd: 0.4,
+    burnAdd: 0.04,
+    weaponId: 'aam-dart',
+    rounds: 2,
+  },
+  'st-asm-1': {
+    id: 'st-asm-1',
+    name: 'ASM-12 Pike ×1',
+    kind: 'WEAPON',
+    stations: 2,
+    rcsAdd: 1.2,
+    burnAdd: 0.12,
+    weaponId: 'asm-pike',
+    rounds: 1,
+  },
+  'st-irst': {
+    id: 'st-irst',
+    name: 'IRST pod (passive)',
+    kind: 'SENSOR_POD',
+    stations: 1,
+    rcsAdd: 0.3,
+    burnAdd: 0.03,
+    // Passive infrared search-and-track: builds the track an AAM shot needs
+    // without radiating anything the enemy's ESM could warn on.
+    sensor: { kind: 'IR', baseRange: 45_000, refRcs: 5, emitting: true },
+  },
 };
 
 export interface AircraftConfig {
@@ -198,6 +265,7 @@ export interface ConfigStats {
   enduranceTicks: number;
   weapons: WeaponStation[];
   jammer?: Omit<JammerDef, 'active'>;
+  sensors: Omit<SensorDef, 'id'>[];
 }
 
 const round4 = (x: number): number => Math.round(x * 10_000) / 10_000;
@@ -213,6 +281,7 @@ export function configStats(cfg: AircraftConfig): ConfigStats {
   let fuel = airframe.internalFuelKg;
   const byWeapon: Record<string, number> = {};
   let jammer: Omit<JammerDef, 'active'> | undefined;
+  const sensors: Omit<SensorDef, 'id'>[] = [];
 
   for (const storeId of cfg.stores) {
     const store = STORES[storeId];
@@ -223,6 +292,7 @@ export function configStats(cfg: AircraftConfig): ConfigStats {
     if (store.kind === 'WEAPON') byWeapon[store.weaponId!] = (byWeapon[store.weaponId!] ?? 0) + store.rounds!;
     if (store.kind === 'JAMMER_POD') jammer = store.jammer;
     if (store.kind === 'DROP_TANK') fuel += store.fuelKg!;
+    if (store.kind === 'SENSOR_POD') sensors.push({ ...store.sensor! });
   }
 
   rcs = round4(rcs);
@@ -239,6 +309,7 @@ export function configStats(cfg: AircraftConfig): ConfigStats {
       .sort()
       .map((weaponId) => ({ weaponId, count: byWeapon[weaponId]! })),
     ...(jammer ? { jammer } : {}),
+    sensors,
   };
 }
 
@@ -272,7 +343,7 @@ export function buildAircraft(cfg: AircraftConfig, index = 0, packageSize = 1): 
     speed: cfg.speed ?? d.speed,
     maxSpeed: airframe.maxSpeed,
     rcs: stats.rcs,
-    sensors: [],
+    sensors: stats.sensors.map((sensor, i) => ({ ...sensor, id: `${cfg.id}-pod${i + 1}` })),
     weapons: stats.weapons,
     ...(stats.jammer ? { jammer: { ...stats.jammer, active: false } } : {}),
     fuelKg: stats.fuelKg,
@@ -307,6 +378,12 @@ export function withBluePackage(state: SimState, configs: AircraftConfig[]): Sim
   }
   configs.forEach((cfg, i) => {
     state.units[cfg.id] = buildAircraft(cfg, i, configs.length);
+    // Store-only weapons (AAM/ASM) ride along into the scenario's catalog.
+    for (const st of state.units[cfg.id]!.weapons) {
+      if (!state.weaponCatalog[st.weaponId] && STORE_WEAPONS[st.weaponId]) {
+        state.weaponCatalog[st.weaponId] = STORE_WEAPONS[st.weaponId]!;
+      }
+    }
   });
   return state;
 }

@@ -116,6 +116,29 @@ export function adaptNemesis(nemesis: NemesisProfile, final: SimState): NemesisP
   return next;
 }
 
+/**
+ * Stamp the squadron's material state onto a freshly built scenario:
+ * airframes LOST on earlier missions don't fly, and accumulated pilot
+ * fatigue shows up as sloppier fuel discipline (+4% burn per sortie of
+ * fatigue, capped at +40%) — the loiter budget the plan was authored
+ * against quietly shrinks mission over mission.
+ */
+export function applySquadronState(state: SimState, squadron: AirframeRecord[]): SimState {
+  for (const rec of squadron) {
+    const unit = state.units[rec.unitId];
+    if (!unit) continue;
+    if (rec.status === 'LOST') {
+      delete state.units[rec.unitId];
+      continue;
+    }
+    if (unit.burnKgPerTick !== undefined && rec.fatigue > 0) {
+      const factor = 1 + 0.04 * Math.min(rec.fatigue, 10);
+      unit.burnKgPerTick = Math.round(unit.burnKgPerTick * factor * 10_000) / 10_000;
+    }
+  }
+  return state;
+}
+
 /** Post-mission squadron bookkeeping: sorties, fatigue, losses. */
 export function updateSquadron(squadron: AirframeRecord[], final: SimState): AirframeRecord[] {
   return squadron.map((rec) => {

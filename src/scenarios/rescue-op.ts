@@ -115,6 +115,23 @@ export function buildRescueScenario(roster?: Operator[]): SimState {
   // The guard and the site join the briefed target deck.
   s.prebriefedTargets.BLUE.push('red-guard-1');
 
+  s.intel = {
+    ...s.intel,
+    'red-hostage-site': {
+      unitId: 'red-hostage-site',
+      confidence: 'VERIFIED',
+      briefedPos: { x: 0, y: -14_000, alt: 0 },
+      note: 'Hostage site confirmed by the ground team.',
+    },
+    'red-guard-1': {
+      unitId: 'red-guard-1',
+      confidence: 'APPROX',
+      briefedPos: { x: 100, y: -14_000, alt: 2 },
+      uncertaintyRadius: 3_000,
+      note: 'MANPADS team near the site — exact firing position unknown.',
+    },
+  };
+
   s.groundOp = {
     teamUnitId: 'blue-team-1',
     heloUnitId: 'blue-helo-1',

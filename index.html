@@ -155,6 +155,33 @@
     }
     #pkgdrop.dragover { border-color: var(--blue); color: var(--blue); }
     .errline { color: var(--red); font-size: 11px; margin-top: 2px; }
+    #campaignoverlay {
+      position: absolute; inset: 0; display: none;
+      background: rgba(5, 8, 12, 0.82); z-index: 11;
+    }
+    #campaignoverlay.open { display: block; }
+    #campaignoverlay .sheet.campaign {
+      position: absolute; inset: 40px 20%; background: var(--panel);
+      border: 1px solid var(--panel-border); border-radius: 6px;
+      padding: 14px 16px; display: flex; flex-direction: column; gap: 6px;
+    }
+    #campaignoverlay h3 {
+      margin: 0 0 4px; font-size: 11px; letter-spacing: 0.12em;
+      color: var(--dim); text-transform: uppercase; font-weight: 700;
+    }
+    #campaignoverlay .row { display: flex; justify-content: space-between; margin: 2px 0; }
+    #campaignoverlay .row .k { color: var(--dim); }
+    .note { color: var(--text); font-size: 12px; margin: 3px 0; }
+    .conf {
+      display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+      padding: 0 5px; border-radius: 3px; border: 1px solid; margin-right: 4px;
+    }
+    .conf.verified { color: var(--green); border-color: var(--green); }
+    .conf.approx { color: var(--amber); border-color: var(--amber); }
+    .conf.contested { color: var(--red); border-color: var(--red); }
+    #dossierpanel .intel { margin: 5px 0; }
+    #dossierpanel .intel.dead { opacity: 0.45; }
+    #dossierpanel .note { color: var(--dim); font-size: 11px; margin: 1px 0 0 2px; }
   </style>
 </head>
 <body>
@@ -182,10 +209,12 @@
         <option value="strike-basic">strike-basic (static IADS)</option>
         <option value="strike-adaptive">strike-adaptive (EMCON + scoot)</option>
         <option value="rescue-op">rescue-op (full multi-domain)</option>
+        <option value="strike-escalation">strike-escalation (CAP + corvette + terrain)</option>
       </select>
     </div>
     <div class="group">
       <button id="builderopen">MISSION BUILDER</button>
+      <button id="campaignopen">CAMPAIGN</button>
       <button id="godview">TRUTH VIEW</button>
       <button id="replay">▶ REPLAY</button>
       <button id="debrief">DEBRIEF</button>
@@ -205,6 +234,22 @@
         <div class="sheet">
           <button id="debriefclose" style="float:right;">CLOSE</button>
           <pre id="debrieftext"></pre>
+        </div>
+      </div>
+      <div id="campaignoverlay">
+        <div class="sheet campaign">
+          <div class="group">
+            <span style="font-weight:700; letter-spacing:0.08em; color:#e8eef7;">CAMPAIGN — persistent squadron &amp; nemesis IADS</span>
+            <span style="flex:1"></span>
+            <button id="campaignadvance">DEBRIEF &amp; ADVANCE</button>
+            <button id="campaignclose">CLOSE</button>
+          </div>
+          <div style="color:var(--dim); font-size:11px; margin-bottom:6px;">
+            Fly a mission to its end, then DEBRIEF &amp; ADVANCE: the enemy staff reads the engagement log and re-tunes
+            doctrine (legible notes below), your airframes log sorties and fatigue, losses stay lost. The next mission
+            reset flies against the adapted world.
+          </div>
+          <div id="campaignbody" style="overflow-y:auto;"></div>
         </div>
       </div>
       <div id="builderoverlay">
@@ -239,6 +284,7 @@
             <option value="jamonly">jam-only (strike-basic)</option>
             <option value="baitblink">bait &amp; blink (strike-adaptive)</option>
             <option value="rescue">full rescue (rescue-op)</option>
+            <option value="escalation">escalation counter (custom package)</option>
           </select>
           <button id="runend">RUN ►►</button>
         </div>
@@ -251,6 +297,7 @@
         <div id="orderlist" style="max-height:130px; overflow-y:auto; font-size:11px;"></div>
       </section>
       <section id="groundpanel" style="display:none;"></section>
+      <section id="dossierpanel" style="display:none; max-height:180px; overflow-y:auto;"></section>
       <section id="unitpanel"><h3>No unit selected</h3></section>
       <section style="flex:1; display:flex; flex-direction:column; min-height:0; padding:0;">
         <h3 style="padding:10px 12px 0;">Mission log</h3>

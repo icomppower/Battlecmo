@@ -173,5 +173,26 @@ export function buildStrikeScenario(): SimState {
     events: [],
     nextEntitySeq: 1,
     weaponCatalog: WEAPONS,
+    // Confidence-graded dossier: everything in this mission is well imaged.
+    intel: {
+      'red-sam-1': {
+        unitId: 'red-sam-1',
+        confidence: 'VERIFIED',
+        briefedPos: { x: 0, y: 0, alt: 5 },
+        note: 'Fixed site, imaged on three consecutive passes.',
+      },
+      'red-ew-1': {
+        unitId: 'red-ew-1',
+        confidence: 'VERIFIED',
+        briefedPos: { x: 0, y: 8_000, alt: 10 },
+        note: 'Continuous emitter — ELINT fix is solid.',
+      },
+      'red-hq': {
+        unitId: 'red-hq',
+        confidence: 'VERIFIED',
+        briefedPos: { x: 2_000, y: 0, alt: 0 },
+        note: 'Hardened C2 node. The objective.',
+      },
+    },
   };
 }

@@ -30,7 +30,10 @@ const CALLSIGN: Record<AirframeDef['role'], string> = {
 
 type DragPayload = { kind: 'airframe' | 'store'; id: string };
 
-export function initBuilder(onCommit: (configs: AircraftConfig[]) => void): void {
+export function initBuilder(
+  onCommit: (configs: AircraftConfig[]) => void,
+  pilotFor?: (unitId: string) => string | undefined,
+): void {
   const overlay = document.getElementById('builderoverlay')!;
   const hangar = document.getElementById('hangar')!;
   const armory = document.getElementById('armory')!;
@@ -127,9 +130,10 @@ export function initBuilder(onCommit: (configs: AircraftConfig[]) => void): void
           `${st.burnKgPerTick} kg/s · endurance ≈${fmtEndurance(st.enduranceTicks)}</div>` +
           `<div class="sub">${esc(wpns)}${st.jammer ? ' · jamming pod' : ''}</div>`;
       }
+      const pilot = pilotFor?.(cfg.id);
       return (
         `<div class="acft${errors.length ? ' invalid' : ''}" data-acft="${i}">` +
-        `<div class="row"><span>${esc(cfg.callsign)} <span class="sub">${esc(af.name)}</span></span>` +
+        `<div class="row"><span>${esc(cfg.callsign)}${pilot ? ` <span class="sub">· ${esc(pilot)}</span>` : ''} <span class="sub">${esc(af.name)}</span></span>` +
         `<button data-unacft="${i}" title="remove from package">✕</button></div>` +
         stats +
         errors.map((err) => `<div class="errline">⚠ ${esc(err)}</div>`).join('') +

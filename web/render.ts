@@ -1,4 +1,4 @@
-import type { SimState, Unit, Vec3 } from '../src/core/types';
+import type { IntelEntry, SimState, Unit, Vec3 } from '../src/core/types';
 import { isSuppressed, jammingFactor, rcsScaledRange } from '../src/core/sensors';
 
 /**
@@ -31,6 +31,8 @@ export interface RenderOptions {
    * this package that would re-find it.
    */
   briefedPositions: Record<string, Vec3>;
+  /** Confidence-graded dossier — drives ghost styling and uncertainty rings. */
+  intel: Record<string, IntelEntry> | null;
   /** Extraction LZ marker, when the mission carries a ground op. */
   lz: Vec3 | null;
 }
@@ -68,12 +70,23 @@ export class Renderer {
     };
   }
 
-  /** Position a unit is *plotted* at, honoring the intel-vs-truth rule. */
-  private plotPos(u: Unit, opts: RenderOptions): Vec3 {
-    if (!opts.godView && u.side === 'RED' && u.domain !== 'AIR') {
-      return opts.briefedPositions[u.id] ?? u.pos;
-    }
-    return u.pos;
+  /**
+   * Position a unit is *plotted* at, honoring the intel-vs-truth rule:
+   * truth for BLUE and in truth view; sensor position while BLUE holds a
+   * contact; otherwise the dossier ghost.
+   */
+  private plotPos(state: SimState, u: Unit, opts: RenderOptions): Vec3 {
+    if (opts.godView || u.side === 'BLUE') return u.pos;
+    if (state.contacts.BLUE[u.id]) return u.pos; // live sensor track
+    return opts.intel?.[u.id]?.briefedPos ?? opts.briefedPositions[u.id] ?? u.pos;
+  }
+
+  /** RED units BLUE neither tracks nor was briefed on simply aren't plotted. */
+  private isPlottable(state: SimState, u: Unit, opts: RenderOptions): boolean {
+    if (opts.godView || u.side === 'BLUE') return true;
+    if (state.contacts.BLUE[u.id]) return true;
+    if (opts.intel) return !!opts.intel[u.id];
+    return u.domain !== 'AIR'; // pre-dossier fallback: ground sites are briefed
   }
 
   private isDisplaced(u: Unit, opts: RenderOptions): boolean {
@@ -88,7 +101,9 @@ export class Renderer {
     ctx.fillRect(0, 0, width, height);
 
     this.drawGrid(ctx, view);
+    this.drawRidges(ctx, state, view);
     this.drawJammerCoverage(ctx, state, view);
+    this.drawUncertainty(ctx, state, view, opts);
     this.drawThreatRings(ctx, state, view, opts);
     this.drawWaypoints(ctx, state, view, opts);
     if (opts.lz) this.drawLz(ctx, view, opts.lz);
@@ -118,6 +133,57 @@ export class Renderer {
       ctx.moveTo(0, sy);
       ctx.lineTo(this.canvas.width, sy);
       ctx.stroke();
+    }
+  }
+
+  /** Terrain ridges: hatched crest lines — the masked side is a planning tool. */
+  private drawRidges(ctx: CanvasRenderingContext2D, state: SimState, view: View): void {
+    for (const r of state.ridges ?? []) {
+      const [x1, y1] = this.toScreen(view, { x: r.x1, y: r.y1 });
+      const [x2, y2] = this.toScreen(view, { x: r.x2, y: r.y2 });
+      ctx.strokeStyle = 'rgba(155,135,95,0.8)';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      // Hatch ticks along the crest.
+      const len = Math.hypot(x2 - x1, y2 - y1);
+      const nx = -(y2 - y1) / len;
+      const ny = (x2 - x1) / len;
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(155,135,95,0.5)';
+      for (let t = 0.08; t < 1; t += 0.08) {
+        const hx = x1 + (x2 - x1) * t;
+        const hy = y1 + (y2 - y1) * t;
+        ctx.beginPath();
+        ctx.moveTo(hx, hy);
+        ctx.lineTo(hx + nx * 5, hy + ny * 5);
+        ctx.stroke();
+      }
+      this.label(ctx, (x1 + x2) / 2, (y1 + y2) / 2 - 10, `${r.id} · ${r.height} m`, 'rgba(155,135,95,0.9)');
+    }
+  }
+
+  /** APPROX/CONTESTED dossier entries get an uncertainty ring at the ghost. */
+  private drawUncertainty(
+    ctx: CanvasRenderingContext2D,
+    state: SimState,
+    view: View,
+    opts: RenderOptions,
+  ): void {
+    if (!opts.intel || opts.godView) return;
+    for (const entry of Object.values(opts.intel)) {
+      const u = state.units[entry.unitId];
+      if (!u?.alive || !entry.uncertaintyRadius) continue;
+      if (state.contacts.BLUE[entry.unitId]) continue; // tracked — no guesswork
+      const color = entry.confidence === 'CONTESTED' ? 'rgba(255,95,86,0.35)' : 'rgba(255,184,77,0.35)';
+      this.circle(ctx, view, entry.briefedPos, entry.uncertaintyRadius);
+      ctx.strokeStyle = color;
+      ctx.setLineDash([3, 7]);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
   }
 
@@ -155,8 +221,9 @@ export class Renderer {
   ): void {
     for (const u of Object.values(state.units)) {
       if (!u.alive || u.side !== 'RED') continue;
+      if (!this.isPlottable(state, u, opts)) continue;
       const suppressed = isSuppressed(u, state.tick);
-      const pp = this.plotPos(u, opts);
+      const pp = this.plotPos(state, u, opts);
 
       // Weapon engagement rings.
       for (const st of u.weapons) {
@@ -272,7 +339,8 @@ export class Renderer {
     opts: RenderOptions,
   ): void {
     for (const u of Object.values(state.units)) {
-      const [sx, sy] = this.toScreen(view, this.plotPos(u, opts));
+      if (!this.isPlottable(state, u, opts)) continue;
+      const [sx, sy] = this.toScreen(view, this.plotPos(state, u, opts));
       const isBlue = u.side === 'BLUE';
       const color = u.alive ? (isBlue ? COLORS.blue : COLORS.red) : COLORS.gray;
 
@@ -310,6 +378,18 @@ export class Renderer {
         ctx.stroke();
       } else if (u.domain === 'AIR') {
         this.drawAircraft(ctx, sx, sy, this.headingOf(u, prev), color);
+      } else if (u.domain === 'SEA') {
+        // Naval hull: pointed bow, flat stern.
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(sx - 8, sy - 4);
+        ctx.lineTo(sx + 4, sy - 4);
+        ctx.lineTo(sx + 9, sy);
+        ctx.lineTo(sx + 4, sy + 4);
+        ctx.lineTo(sx - 8, sy + 4);
+        ctx.closePath();
+        ctx.stroke();
       } else if (u.side === 'BLUE') {
         // Friendly ground element: small filled block (infantry wedge kin).
         ctx.fillStyle = color;
@@ -332,7 +412,7 @@ export class Renderer {
           (r) =>
             r.alive &&
             r.side === 'RED' &&
-            r.weapons.some((w) => state.weaponCatalog[w.weaponId]?.kind === 'SAM') &&
+            r.weapons.some((w) => ['SAM', 'AAM'].includes(state.weaponCatalog[w.weaponId]?.kind ?? '')) &&
             !isSuppressed(r, state.tick) &&
             r.sensors.some((se) => se.kind === 'RADAR' && se.emitting),
         );
@@ -362,6 +442,11 @@ export class Renderer {
       }
       if (u.side === 'RED' && u.domain !== 'AIR' && this.isDisplaced(u, opts)) {
         tag += opts.godView ? ' · DISPLACED' : ' · last known';
+      }
+      // Un-tracked, non-verified dossier ghosts wear their confidence grade.
+      if (!opts.godView && u.side === 'RED' && !state.contacts.BLUE[u.id]) {
+        const conf = opts.intel?.[u.id]?.confidence;
+        if (conf && conf !== 'VERIFIED') tag += conf === 'CONTESTED' ? ' · ?' : ' · approx';
       }
       // Stagger ground-site labels so co-located sites stay readable:
       // shooters above, sensors beside, the objective below.

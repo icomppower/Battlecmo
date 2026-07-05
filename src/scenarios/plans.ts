@@ -1,4 +1,5 @@
 import type { Order } from '../core/types';
+import type { AircraftConfig } from '../oob/assembly';
 
 /**
  * Scripted mission plans against the strike-basic scenario. These are what
@@ -138,6 +139,102 @@ export function rescueNoStrikePlan(): Order[] {
 export function heloRecklessPlan(): Order[] {
   return [
     { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-helo-1', waypoints: [{ x: 500, y: -13_500, alt: 30 }] },
+  ];
+}
+
+/**
+ * Force composition for the escalation scenario — this mission is unwinnable
+ * with the reference package; the counters are hung on the wing:
+ *
+ *   Hammer 1: IRST pod + AAM rack + AGM rack — passive-kill self-escort.
+ *   Hammer 2: anti-ship missile + AGM rack — clears the corvette, then flies
+ *             the masked ridge corridor on the deck.
+ */
+export function escalationPackage(): AircraftConfig[] {
+  return [
+    {
+      id: 'blue-striker-1',
+      callsign: 'Hammer 1',
+      airframeId: 'af-ranger',
+      stores: ['st-irst', 'st-aam-2', 'st-agm-2'],
+      spawn: { x: -140_000, y: -3_000, alt: 8_000 },
+      speed: 250,
+    },
+    {
+      id: 'blue-striker-2',
+      callsign: 'Hammer 2',
+      airframeId: 'af-ranger',
+      stores: ['st-asm-1', 'st-agm-2'],
+      spawn: { x: -140_000, y: 3_000, alt: 8_000 },
+      speed: 250,
+    },
+    {
+      id: 'blue-sead-1',
+      callsign: 'Viper (SEAD)',
+      airframeId: 'af-viper',
+      stores: ['st-arm-2'],
+      spawn: { x: -140_000, y: 2_000, alt: 9_000 },
+      speed: 250,
+    },
+    {
+      id: 'blue-ea-1',
+      callsign: 'Static (EW)',
+      airframeId: 'af-static',
+      stores: ['st-jampod'],
+      spawn: { x: -110_000, y: 12_000, alt: 10_000 },
+      speed: 0,
+    },
+  ];
+}
+
+/**
+ * The escalation counter-plan, one move per new threat layer:
+ *
+ *   SEA:     Pike launched on the 6-h-old APPROX fix at t=5 (the missile's
+ *            seeker makes up the dossier's error); the corvette is on the
+ *            bottom before Hammer 2 crosses its SAM ring.
+ *   AIR:     Hammer 1 closes to IRST range of the CONTESTED CAP station,
+ *            builds a passive track (nothing radiates — no warning), the
+ *            side goes weapons-free at t=300 (the decision point), and a
+ *            Dart takes the fighter head-on.
+ *   TERRAIN: Hammer 2 drops to 60 m behind the Koro ridge — masked from
+ *            every IADS ground radar — and pops out inside the SAM's cue
+ *            ring but below its 100 m engagement floor. The radar comes up,
+ *            Viper's reactive ARM forces the blink, and the AGMs release
+ *            inside it.
+ */
+export function escalationPlan(): Order[] {
+  return [
+    { atTick: 0, type: 'SET_ROE', side: 'BLUE', level: 'TIGHT' },
+    { atTick: 0, type: 'SET_JAMMER', unitId: 'blue-ea-1', active: true },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-sead-1', waypoints: [{ x: -64_000, y: 2_000, alt: 9_000 }] },
+    // Hammer 1 climbs toward the CAP's real neighborhood, stopping outside
+    // the fighter's jammed radar but inside IRST range.
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: -68_000, y: 14_000, alt: 8_000 }] },
+    // Hammer 2 stages southwest, outside the corvette's ring.
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [{ x: -95_000, y: -30_000, alt: 8_000 }] },
+    // SEA: standoff anti-ship shot on the briefed patrol box.
+    { atTick: 5, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'asm-pike', targetId: 'red-corvette-1' },
+    // AIR: weapons-free is a command decision — the CAP is not pre-briefed.
+    { atTick: 300, type: 'SET_ROE', side: 'BLUE', level: 'FREE' },
+    { atTick: 395, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'aam-dart', targetId: 'red-cap-1' },
+    { atTick: 420, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'aam-dart', targetId: 'red-cap-1' },
+    // TERRAIN: the deck run behind the Koro ridge.
+    { atTick: 400, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [
+      { x: -45_000, y: -18_000, alt: 60 },
+      { x: -26_000, y: -5_000, alt: 60 },
+    ] },
+    // Reactive SEAD once the corridor exit cues the battery up.
+    { atTick: 700, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'arm-lance', targetId: 'red-sam-1' },
+    { atTick: 800, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'agm-stormbreak', targetId: 'red-hq' },
+    { atTick: 801, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'agm-stormbreak', targetId: 'red-hq' },
+    // Egress: back out the way the terrain allows.
+    { atTick: 810, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [
+      { x: -45_000, y: -18_000, alt: 60 },
+      { x: -140_000, y: 3_000, alt: 8_000 },
+    ] },
+    { atTick: 500, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: -140_000, y: -3_000, alt: 8_000 }] },
+    { atTick: 900, type: 'RTB', unitId: 'blue-sead-1' },
   ];
 }
 
