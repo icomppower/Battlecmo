@@ -32,6 +32,7 @@ export function tick(state: SimState, ordersLog: Order[], seed: number): SimStat
   flyMissiles(s, seed);
   runGroundOp(s);
   updateContacts(s);
+  runCapDoctrine(s);
   runSamDoctrine(s);
   runDefensiveEngagements(s);
 
@@ -411,6 +412,52 @@ function updateContacts(s: SimState): void {
           s.events.push({ tick: s.tick, type: 'CONTACT_LOST', side, targetId: contact.targetId });
         }
       }
+    }
+  }
+}
+
+/**
+ * Combat air patrol doctrine: a fighter holds its station until an own-side
+ * air track appears inside the commit ring, then dashes a pursuit curve at
+ * it (waypoint re-laid on the target every tick); when the track dies it
+ * cruises back and re-anchors. Contacts below commitMinAlt don't tempt it —
+ * they're under the missile floor anyway, and chasing them is how you get
+ * baited (nemesis-tunable, same as the SAM cue floor).
+ */
+function runCapDoctrine(s: SimState): void {
+  for (const unit of sortedAliveUnits(s)) {
+    const doctrine = unit.capDoctrine;
+    if (!doctrine) continue;
+
+    const contacts = Object.values(s.contacts[unit.side]).sort(
+      (a, b) => b.quality - a.quality || a.targetId.localeCompare(b.targetId),
+    );
+    let target: Unit | null = null;
+    for (const contact of contacts) {
+      const t = s.units[contact.targetId];
+      if (!t?.alive || t.domain !== 'AIR') continue;
+      if (t.pos.alt < (doctrine.commitMinAlt ?? 0)) continue;
+      if (dist2d(doctrine.station, t.pos) > doctrine.commitRange) continue;
+      target = t;
+      break;
+    }
+
+    if (target) {
+      if (unit.committedTargetId !== target.id) {
+        unit.committedTargetId = target.id;
+        s.events.push({ tick: s.tick, type: 'CAP_COMMIT', unitId: unit.id, targetId: target.id });
+      }
+      unit.speed = doctrine.dashSpeed;
+      // Pursuit curve: re-lay the intercept point every tick; never chase
+      // into the dirt.
+      unit.waypoints = [{ x: target.pos.x, y: target.pos.y, alt: Math.max(target.pos.alt, 1_000) }];
+    } else if (unit.committedTargetId !== undefined) {
+      unit.committedTargetId = undefined;
+      unit.speed = doctrine.cruiseSpeed;
+      unit.waypoints = [{ ...doctrine.station }];
+    } else if (unit.waypoints.length === 0 && unit.speed > 0) {
+      unit.speed = 0;
+      s.events.push({ tick: s.tick, type: 'CAP_ON_STATION', unitId: unit.id });
     }
   }
 }

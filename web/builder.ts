@@ -30,9 +30,14 @@ const CALLSIGN: Record<AirframeDef['role'], string> = {
 
 type DragPayload = { kind: 'airframe' | 'store'; id: string };
 
+export interface SquadronInfo {
+  pilot: string;
+  lost: boolean;
+}
+
 export function initBuilder(
   onCommit: (configs: AircraftConfig[]) => void,
-  pilotFor?: (unitId: string) => string | undefined,
+  squadronInfo?: (unitId: string) => SquadronInfo | undefined,
 ): void {
   const overlay = document.getElementById('builderoverlay')!;
   const hangar = document.getElementById('hangar')!;
@@ -114,6 +119,8 @@ export function initBuilder(
     const cards = configs.map((cfg, i) => {
       const af = AIRFRAMES[cfg.airframeId]!;
       const errors = validateConfig(cfg);
+      const info = squadronInfo?.(cfg.id);
+      if (info?.lost) errors.push(`${info.pilot}'s airframe was LOST on a previous mission`);
       const chips = cfg.stores
         .map(
           (sid, si) =>
@@ -130,7 +137,7 @@ export function initBuilder(
           `${st.burnKgPerTick} kg/s · endurance ≈${fmtEndurance(st.enduranceTicks)}</div>` +
           `<div class="sub">${esc(wpns)}${st.jammer ? ' · jamming pod' : ''}</div>`;
       }
-      const pilot = pilotFor?.(cfg.id);
+      const pilot = info && !info.lost ? info.pilot : undefined;
       return (
         `<div class="acft${errors.length ? ' invalid' : ''}" data-acft="${i}">` +
         `<div class="row"><span>${esc(cfg.callsign)}${pilot ? ` <span class="sub">· ${esc(pilot)}</span>` : ''} <span class="sub">${esc(af.name)}</span></span>` +
@@ -142,7 +149,7 @@ export function initBuilder(
       );
     });
     pkgList.innerHTML = cards.join('');
-    const invalid = configs.some((c) => validateConfig(c).length > 0);
+    const invalid = configs.some((c) => validateConfig(c).length > 0 || squadronInfo?.(c.id)?.lost);
     commitBtn.disabled = configs.length === 0 || invalid;
     commitBtn.textContent = configs.length === 0 ? 'COMMIT (empty package)' : invalid ? 'COMMIT (fix loadouts)' : 'COMMIT PACKAGE';
   }

@@ -51,6 +51,10 @@ function narrate(e: SimEvent, s: SimState): string | null {
       return `${name(e.unitId)} displaced from its firing position. ${CHATTER.SAM_RELOCATING}`;
     case 'SAM_DEPLOYED':
       return `${name(e.unitId)} redeployed at its fallback site.`;
+    case 'CAP_COMMIT':
+      return `${name(e.unitId)} committed on ${name(e.targetId)} — intercept inbound.`;
+    case 'CAP_ON_STATION':
+      return `${name(e.unitId)} back on CAP station.`;
     case 'BINGO_FUEL':
       return `${name(e.unitId)} hit bingo fuel and turned for home.`;
     case 'FUEL_EXHAUSTED':

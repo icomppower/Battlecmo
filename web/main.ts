@@ -142,6 +142,28 @@ let packageConfigs: AircraftConfig[] | null = null;
 let campaign: CampaignState = newCampaign(importRoster());
 let campaignApplied = false;
 
+// Campaign survives page reloads — the deployed game keeps your war going.
+const CAMPAIGN_KEY = 'battlecmo-campaign-v1';
+function saveCampaign(): void {
+  try {
+    localStorage.setItem(CAMPAIGN_KEY, JSON.stringify({ campaign, campaignApplied }));
+  } catch {
+    /* storage unavailable (private mode etc.) — campaign is session-only */
+  }
+}
+try {
+  const raw = localStorage.getItem(CAMPAIGN_KEY);
+  if (raw) {
+    const saved = JSON.parse(raw) as { campaign?: CampaignState; campaignApplied?: boolean };
+    if (saved?.campaign?.squadron && saved.campaign.nemesis) {
+      campaign = saved.campaign;
+      campaignApplied = !!saved.campaignApplied;
+    }
+  }
+} catch {
+  /* corrupt save — start fresh */
+}
+
 /**
  * Scenario builder with the committed package (if any) swapped in and, once
  * a campaign debrief has run, the nemesis doctrine + squadron wear applied.
@@ -316,7 +338,10 @@ initBuilder(
     selectedId = null;
     speed = 0;
   },
-  (unitId) => campaign.squadron.find((r) => r.unitId === unitId && r.status === 'READY')?.pilot,
+  (unitId) => {
+    const rec = campaign.squadron.find((r) => r.unitId === unitId);
+    return rec ? { pilot: rec.pilot, lost: rec.status === 'LOST' } : undefined;
+  },
 );
 
 document.getElementById('replay')!.addEventListener('click', () => {
@@ -473,12 +498,25 @@ document.getElementById('campaignadvance')!.addEventListener('click', () => {
   const final = timeline.states[timeline.states.length - 1]!;
   campaign = debriefCampaign(campaign, final);
   campaignApplied = true;
+  saveCampaign();
   timeline.reset(scenarioBuild(scenarioSelect.value));
   selectedId = null;
   speed = 0;
   renderCampaign();
   document.getElementById('campaignopen')!.classList.add('on');
 });
+
+document.getElementById('campaignreset')!.addEventListener('click', () => {
+  campaign = newCampaign(importRoster());
+  campaignApplied = false;
+  saveCampaign();
+  timeline.reset(scenarioBuild(scenarioSelect.value));
+  selectedId = null;
+  speed = 0;
+  renderCampaign();
+  document.getElementById('campaignopen')!.classList.remove('on');
+});
+if (campaignApplied) document.getElementById('campaignopen')!.classList.add('on');
 
 function renderCampaign(): void {
   const notes = campaign.nemesis.notes.length
@@ -649,6 +687,17 @@ function formatEvent(e: SimEvent, state: SimState): { text: string; cls: string 
       return godView ? { text: `${name(e.unitId)} displacing (shoot-and-scoot)`, cls: 'red' } : null;
     case 'SAM_DEPLOYED':
       return godView ? { text: `${name(e.unitId)} redeployed`, cls: 'red' } : null;
+    case 'CAP_COMMIT': {
+      // An enemy fighter turning in is only knowable if you can see it.
+      const red = state.units[e.unitId]?.side === 'RED';
+      if (red && !godView && !state.contacts.BLUE[e.unitId]) return null;
+      return { text: `${name(e.unitId)} COMMITTING on ${name(e.targetId)}`, cls: red ? 'red' : 'blue' };
+    }
+    case 'CAP_ON_STATION': {
+      const red = state.units[e.unitId]?.side === 'RED';
+      if (red && !godView) return null;
+      return { text: `${name(e.unitId)} back on station`, cls: red ? 'red' : 'blue' };
+    }
     case 'ROE_SET':
       return e.side === 'BLUE' ? { text: `ROE set to ${e.level}`, cls: 'blue' } : null;
     case 'GROUND_PHASE':

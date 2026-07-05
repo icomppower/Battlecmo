@@ -117,3 +117,47 @@ describe('escalation scenario: air-to-air, naval, terrain, dossier', () => {
     expect(final.events.some((e) => e.type === 'LAUNCH' && e.shooterId === 'red-cap-1')).toBe(false);
   });
 });
+
+describe('CAP intercept doctrine (commit / pursue / return to station)', () => {
+  it('commits on a track inside the ring, pursues, and kills', () => {
+    const s = buildEscalationScenario();
+    const final = run(s, [
+      { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: -55_000, y: 30_000, alt: 8_000 }] },
+    ], SEED, 900);
+    const commit = final.events.find((e) => e.type === 'CAP_COMMIT');
+    expect(commit).toBeDefined();
+    expect((commit as Extract<SimEvent, { type: 'CAP_COMMIT' }>).targetId).toBe('blue-striker-1');
+    // The fighter left its station to run the intercept.
+    const capPositions = final.events.some((e) => e.type === 'LAUNCH' && e.shooterId === 'red-cap-1');
+    expect(capPositions).toBe(true);
+    expect(final.units['blue-striker-1']!.alive).toBe(false);
+  });
+
+  it('never commits on a contact under its missile floor — the bait defense', () => {
+    const s = buildEscalationScenario();
+    const final = run(s, [
+      { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [
+        { x: -95_000, y: 5_000, alt: 60 },
+        { x: -40_000, y: 14_000, alt: 60 },
+      ] },
+    ], SEED, 700);
+    expect(final.events.some((e) => e.type === 'CAP_COMMIT')).toBe(false);
+  });
+
+  it('returns to station after the track dies', () => {
+    const s = buildEscalationScenario();
+    // Dip a striker into the commit ring, then run it far back out west so
+    // the track decays; the fighter should re-anchor.
+    const final = run(s, [
+      { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: -62_000, y: 20_000, alt: 8_000 }] },
+      { atTick: 320, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: -160_000, y: 20_000, alt: 8_000 }] },
+    ], SEED, 1_600);
+    expect(final.events.some((e) => e.type === 'CAP_COMMIT')).toBe(true);
+    expect(final.events.some((e) => e.type === 'CAP_ON_STATION')).toBe(true);
+    const cap = final.units['red-cap-1']!;
+    if (cap.alive) {
+      const station = cap.capDoctrine!.station;
+      expect(Math.hypot(cap.pos.x - station.x, cap.pos.y - station.y)).toBeLessThan(1_000);
+    }
+  });
+});

@@ -70,6 +70,13 @@ export function buildEscalationScenario(): SimState {
     sensors: [{ id: 'nose-radar', kind: 'RADAR', baseRange: 80_000, refRcs: 5, emitting: true }],
     weapons: [{ weaponId: 'aam-saber', count: 4 }],
     maxConcurrentEngagements: 1,
+    capDoctrine: {
+      station: { x: -30_000, y: 18_000, alt: 9_000 },
+      commitRange: 45_000,
+      commitMinAlt: 100, // below the Saber's floor — not worth committing on
+      cruiseSpeed: 200,
+      dashSpeed: 320,
+    },
     waypoints: [],
     alive: true,
   };

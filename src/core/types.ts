@@ -105,6 +105,22 @@ export interface SamDoctrine {
   scootSpeed?: number;
 }
 
+/**
+ * Combat-air-patrol doctrine: hold a station, commit on hostile air tracks
+ * inside the commit ring, pursue, and fall back to the station when the
+ * track dies. Deterministic state machine, like the SAM doctrine — the
+ * nemesis layer can tune these numbers between missions.
+ */
+export interface CapDoctrine {
+  station: Vec3;
+  /** Commit on contacts within this range of the station (not of the jet). */
+  commitRange: number;
+  /** Ignore contacts below this altitude — they're under the AAM floor anyway. */
+  commitMinAlt?: number;
+  cruiseSpeed: number;
+  dashSpeed: number;
+}
+
 export interface Unit {
   id: string;
   side: Side;
@@ -121,6 +137,9 @@ export interface Unit {
   jammer?: JammerDef;
   emitterDoctrine?: EmitterDoctrine;
   samDoctrine?: SamDoctrine;
+  capDoctrine?: CapDoctrine;
+  /** Target id a CAP fighter is currently committed against. */
+  committedTargetId?: string;
   /**
    * 0..1 — how much of an enemy jammer's strength this unit's radars shrug
    * off (frequency agility / burn-through upgrades). Nemesis-tunable.
@@ -269,6 +288,8 @@ export type SimEvent =
   | { tick: number; type: 'SAM_EMCON'; unitId: string; emitting: boolean }
   | { tick: number; type: 'SAM_RELOCATING'; unitId: string }
   | { tick: number; type: 'SAM_DEPLOYED'; unitId: string }
+  | { tick: number; type: 'CAP_COMMIT'; unitId: string; targetId: string }
+  | { tick: number; type: 'CAP_ON_STATION'; unitId: string }
   | { tick: number; type: 'BINGO_FUEL'; unitId: string }
   | { tick: number; type: 'FUEL_EXHAUSTED'; unitId: string }
   | { tick: number; type: 'JAMMER_SET'; unitId: string; active: boolean }
