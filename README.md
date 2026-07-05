@@ -2,6 +2,8 @@
 
 Deterministic multi-domain strike/rescue C2 simulation (CMO-style wargame). This repo implements the design doc's build order, starting with **step 1: the headless deterministic tick core** — sensors, weapons envelopes, EW/SEAD, fuel, and ROE — tested against a single strike scenario.
 
+**▶ Play it:** https://icomppower.github.io/Battlecmo/ (deployed from the `gh-pages` branch; redeploy with `npm run build:pages` and push `dist/` there)
+
 > **Design doc:** *Overwatch Directive — Multi-Domain Hostage Rescue C2 Sim* (Notion). Same universe and tick philosophy as Breach Protocol: the ground team owns everything below the rooftop; this game owns everything above it.
 
 ## The core contract

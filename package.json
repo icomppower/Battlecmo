@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "dev": "vite",
     "build": "vite build",
+    "build:pages": "vite build --base=/Battlecmo/",
     "preview": "vite preview"
   },
   "devDependencies": {
