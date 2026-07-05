@@ -458,6 +458,8 @@ function describeOrder(o: Order): string {
       return `ROE ${o.side} ${o.level}`;
     case 'SET_JAMMER':
       return `${o.unitId} jammer ${o.active ? 'ON' : 'OFF'}`;
+    case 'SET_IFF':
+      return `${o.unitId} IFF ${o.on ? 'SQUAWK' : 'SILENT'}`;
     case 'ENGAGE':
       return `${o.unitId} ${o.weaponId} → ${o.targetId}`;
     case 'RTB':
@@ -633,6 +635,9 @@ unitPanel.addEventListener('click', (e) => {
         active: btn.dataset.active === 'true',
       });
       break;
+    case 'iff':
+      issueAt({ type: 'SET_IFF', unitId: btn.dataset.unit!, on: btn.dataset.on === 'true' });
+      break;
     case 'rtb':
       issueAt({ type: 'RTB', unitId: btn.dataset.unit! });
       break;
@@ -664,6 +669,7 @@ function renderUnitPanel(state: SimState): string {
     row(w?.name ?? st.weaponId, `× ${st.count}`);
   }
   if (u.jammer) row('jammer', u.jammer.active ? 'RADIATING' : 'standby');
+  if (u.domain === 'AIR') row('IFF', u.iffOn === false ? 'SILENT (bogey to friendlies)' : 'squawking');
 
   if (!u.alive || u.side !== 'BLUE') return rows.join('');
 
@@ -672,6 +678,13 @@ function renderUnitPanel(state: SimState): string {
     actions.push(
       `<button data-action="jammer" data-unit="${u.id}" data-active="${!u.jammer.active}" class="${u.jammer.active ? 'on' : ''}">` +
         `${u.jammer.active ? 'JAMMER OFF' : 'JAMMER ON'}</button>`,
+    );
+  }
+  if (u.domain === 'AIR') {
+    const silent = u.iffOn === false;
+    actions.push(
+      `<button data-action="iff" data-unit="${u.id}" data-on="${silent}" class="${silent ? '' : 'on'}">` +
+        `${silent ? 'IFF SQUAWK' : 'IFF SILENT'}</button>`,
     );
   }
   if (u.homeBase && u.domain === 'AIR') {
@@ -736,6 +749,10 @@ function formatEvent(e: SimEvent, state: SimState): { text: string; cls: string 
       return { text: `${name(e.unitId)} flamed out`, cls: 'red' };
     case 'JAMMER_SET':
       return { text: `${name(e.unitId)} jammer ${e.active ? 'RADIATING' : 'standby'}`, cls: 'blue' };
+    case 'IFF_SET': {
+      if (state.units[e.unitId]?.side === 'RED' && !godView) return null;
+      return { text: `${name(e.unitId)} transponder ${e.on ? 'SQUAWKING' : 'SILENT — reads as a bogey'}`, cls: e.on ? 'blue' : 'warn' };
+    }
     case 'SAM_EMCON':
       // ESM is passive — emissions starting/stopping are knowable to BLUE.
       return {

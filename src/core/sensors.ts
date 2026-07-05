@@ -1,4 +1,4 @@
-import type { SensorDef, SimState, Unit } from './types';
+import type { Contact, SensorDef, SimState, Unit } from './types';
 import { dist2d, dist3d, losBlocked, radarHorizon } from './geometry';
 import { getTerrain, losBlockedByTerrain } from './terrain';
 
@@ -84,3 +84,46 @@ export const TRACK_BUILD_RATE = 0.2;
 export const TRACK_DECAY_RATE = 0.05;
 /** Contacts are dropped entirely below this quality. */
 export const TRACK_DROP_THRESHOLD = 0.01;
+
+// ---------------------------------------------------------------------------
+// IFF / identification — deterministic, computed, never stored.
+// ---------------------------------------------------------------------------
+
+export type ContactIdentity = 'HOSTILE' | 'FRIEND' | 'UNKNOWN';
+
+/** Track quality at which an enemy contact is *declared* hostile. */
+export const HOSTILE_ID_QUALITY = 0.6;
+/**
+ * Track quality at which a transponder-silent own-side bogey is visually
+ * identified as friendly. Deliberately ABOVE every weapon's
+ * requiredTrackQuality: starting from a cold track, the launch decision
+ * always ripens before the VID does — the only things that save a silent
+ * friend are geometry (detected far enough out that VID beats the envelope),
+ * the squawk, or ROE discipline.
+ */
+export const VID_QUALITY = 0.8;
+
+/**
+ * What `side` believes this contact is. Identification is a pure function of
+ * (allegiance truth, transponder state, track quality) — deterministic and
+ * plannable, like everything else in the sensor model:
+ *
+ *  - a squawking own-side unit reads FRIEND instantly (it also never enters
+ *    its own side's contact table — see updateContacts);
+ *  - a transponder-silent friend is a bogey: UNKNOWN until the track is held
+ *    to VID quality;
+ *  - an enemy is UNKNOWN until the track quality supports a hostile
+ *    declaration.
+ *
+ * UNKNOWN is the dangerous word: under FREE ROE an unknown is engageable —
+ * that is what "weapons free" means, and it is how blue-on-blue happens.
+ */
+export function identifyContact(state: SimState, side: Unit['side'], contact: Contact): ContactIdentity {
+  const target = state.units[contact.targetId];
+  if (!target) return 'UNKNOWN';
+  if (target.side === side) {
+    if (target.iffOn !== false) return 'FRIEND';
+    return contact.quality >= VID_QUALITY ? 'FRIEND' : 'UNKNOWN';
+  }
+  return contact.quality >= HOSTILE_ID_QUALITY ? 'HOSTILE' : 'UNKNOWN';
+}

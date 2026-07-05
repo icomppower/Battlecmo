@@ -172,6 +172,15 @@ export interface Unit {
   relocating?: boolean;
   /** Last tick a CUED battery had a cue inside cueRange. */
   lastCuedTick?: number;
+  /**
+   * IFF transponder. Absent/true = squawking: own-side sensors resolve the
+   * unit as FRIEND instantly and it never appears in its own side's contact
+   * table. false = EMCON-silent: to its own side the unit is a *bogey* — an
+   * UNKNOWN contact that must be held to VID quality before it reads as
+   * friendly. Identification is computed, never stored (see identifyContact),
+   * so replay determinism is untouched.
+   */
+  iffOn?: boolean;
   /** Fuel model — only meaningful for aircraft. */
   fuelKg?: number;
   burnKgPerTick?: number;
@@ -310,6 +319,7 @@ export type SimEvent =
   | { tick: number; type: 'BINGO_FUEL'; unitId: string }
   | { tick: number; type: 'FUEL_EXHAUSTED'; unitId: string }
   | { tick: number; type: 'JAMMER_SET'; unitId: string; active: boolean }
+  | { tick: number; type: 'IFF_SET'; unitId: string; on: boolean }
   | { tick: number; type: 'ROE_SET'; side: Side; level: RoeLevel }
   | { tick: number; type: 'GROUND_PHASE'; phase: GroundPhase }
   | { tick: number; type: 'GROUND_DENIED'; order: string; reason: GroundDenialReason }
@@ -325,12 +335,14 @@ export type LaunchDenialReason =
   | 'NO_TRACK'
   | 'NO_WEAPON'
   | 'TARGET_DEAD'
-  | 'SHOOTER_DEAD';
+  | 'SHOOTER_DEAD'
+  | 'TARGET_FRIENDLY';
 
 export type Order =
   | { atTick: number; type: 'SET_WAYPOINTS'; unitId: string; waypoints: Vec3[] }
   | { atTick: number; type: 'SET_ROE'; side: Side; level: RoeLevel }
   | { atTick: number; type: 'SET_JAMMER'; unitId: string; active: boolean }
+  | { atTick: number; type: 'SET_IFF'; unitId: string; on: boolean }
   | { atTick: number; type: 'ENGAGE'; unitId: string; weaponId: string; targetId: string }
   | { atTick: number; type: 'RTB'; unitId: string }
   | { atTick: number; type: 'GROUND_INFIL' }

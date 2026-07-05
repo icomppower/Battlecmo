@@ -1,5 +1,6 @@
 import type { LaunchDenialReason, SimState, Unit, WeaponDef } from './types';
 import { dist2d } from './geometry';
+import { identifyContact } from './sensors';
 import { aglOf } from './terrain';
 
 /**
@@ -43,6 +44,17 @@ export function validateLaunch(
 ): LaunchDenialReason | null {
   if (!shooter.alive) return 'SHOOTER_DEAD';
   if (!target.alive) return 'TARGET_DEAD';
+  // IFF interlock: a target the shooter's side has identified as FRIEND is
+  // never clearable, at any ROE. A transponder-silent own-side unit that is
+  // still an UNKNOWN bogey in the contact table falls through to the ROE
+  // gates like any other contact — under FREE that shot is legal, and that
+  // is precisely the friendly-fire risk the transponder exists to remove.
+  if (target.side === shooter.side) {
+    const contact = state.contacts[shooter.side][target.id];
+    if (!contact || identifyContact(state, shooter.side, contact) === 'FRIEND') {
+      return 'TARGET_FRIENDLY';
+    }
+  }
   const station = shooter.weapons.find((s) => s.weaponId === weapon.id);
   if (!station || station.count <= 0) return 'NO_WEAPON';
   const roeDenial = roeAllows(state, shooter, target);

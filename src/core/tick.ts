@@ -6,6 +6,7 @@ import {
   TRACK_DECAY_RATE,
   TRACK_DROP_THRESHOLD,
   canDetect,
+  identifyContact,
   isSuppressed,
 } from './sensors';
 import { validateLaunch } from './weapons';
@@ -73,6 +74,14 @@ function applyOrders(s: SimState, ordersLog: Order[]): void {
         if (unit?.alive && unit.jammer) {
           unit.jammer.active = order.active;
           s.events.push({ tick: s.tick, type: 'JAMMER_SET', unitId: unit.id, active: order.active });
+        }
+        break;
+      }
+      case 'SET_IFF': {
+        const unit = s.units[order.unitId];
+        if (unit?.alive) {
+          unit.iffOn = order.on;
+          s.events.push({ tick: s.tick, type: 'IFF_SET', unitId: unit.id, on: order.on });
         }
         break;
       }
@@ -370,10 +379,16 @@ function updateContacts(s: SimState): void {
   for (const side of sides) {
     const own = sortedAliveUnits(s).filter((u) => u.side === side);
     const enemies = sortedAliveUnits(s).filter((u) => u.side !== side);
+    // IFF: a transponder-silent own-side unit is a *bogey* — it enters its
+    // own side's contact table exactly like an enemy would, and everything
+    // downstream (SAM cues, CAP commits, launch validation) treats it by its
+    // computed identity, not its allegiance truth. A squawking unit never
+    // appears here, which keeps every squawk-normal scenario byte-identical.
+    const bogeys = own.filter((u) => u.iffOn === false);
     const table = s.contacts[side];
 
-    for (const enemy of enemies) {
-      const spotter = own.find((u) => canDetect(s, u, enemy));
+    for (const enemy of [...enemies, ...bogeys]) {
+      const spotter = own.find((u) => u.id !== enemy.id && canDetect(s, u, enemy));
       const existing = table[enemy.id];
       if (spotter) {
         if (!existing) {
@@ -403,10 +418,12 @@ function updateContacts(s: SimState): void {
       }
     }
 
-    // Contacts on destroyed units decay out the same way.
+    // Contacts on destroyed units decay out the same way — as does the track
+    // on a bogey that started squawking again (the transponder resolves it;
+    // there is nothing left to hold a track on).
     for (const contact of Object.values(table)) {
       const target = s.units[contact.targetId];
-      if (!target || !target.alive) {
+      if (!target || !target.alive || (target.side === side && target.iffOn !== false)) {
         contact.quality -= TRACK_DECAY_RATE;
         if (contact.quality < TRACK_DROP_THRESHOLD) {
           delete table[contact.targetId];
@@ -442,6 +459,7 @@ function runCapDoctrine(s: SimState): void {
       for (const contact of contacts) {
         const t = s.units[contact.targetId];
         if (!t?.alive || t.domain !== 'AIR') continue;
+        if (identifyContact(s, unit.side, contact) === 'FRIEND') continue;
         if (aglOf(s, t) < (doctrine.commitMinAlt ?? 0)) continue;
         if (!t.sensors.some((se) => se.kind === 'RADAR' && se.emitting)) continue;
         if (dist2d(doctrine.station, t.pos) > ring) continue;
@@ -453,6 +471,11 @@ function runCapDoctrine(s: SimState): void {
     for (const contact of target ? [] : contacts) {
       const t = s.units[contact.targetId];
       if (!t?.alive || t.domain !== 'AIR') continue;
+      // Committing on an UNKNOWN bogey is correct doctrine — closing raises
+      // track quality, and when the VID flips it to FRIEND the fighter
+      // breaks off (the contact stops qualifying and the commit dissolves).
+      // Intercept-to-identify falls out of the identity model for free.
+      if (identifyContact(s, unit.side, contact) === 'FRIEND') continue;
       if (aglOf(s, t) < (doctrine.commitMinAlt ?? 0)) continue;
       if (dist2d(doctrine.station, t.pos) > doctrine.commitRange) continue;
       target = t;
@@ -591,6 +614,10 @@ function runDefensiveEngagements(s: SimState): void {
       if (inFlight >= limit) break;
       const target = s.units[contact.targetId];
       if (!target || !target.alive) continue;
+      // Identified friends are filtered here for doctrine legibility, and
+      // validateLaunch enforces the same interlock — an UNKNOWN bogey under
+      // FREE passes both, which is what makes blue-on-blue possible.
+      if (identifyContact(s, unit.side, contact) === 'FRIEND') continue;
       // One missile per target per shooter at a time.
       const alreadyEngaged = Object.values(s.missiles).some(
         (m) => m.alive && m.shooterId === unit.id && m.targetId === target.id,
