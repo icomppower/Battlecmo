@@ -124,6 +124,27 @@ The ridge abstraction grew up into a **heightfield LOS model**: `tools/bake-terr
 
 `strike-fjord` is the mission Norway wrote: the summit EW radar (a real 972 m coastal top) sees a high ingress ~90 km out, but a BFS over the masked-water cells of the actual elevation data found a 120 m corridor up Romsdalsfjorden ending 28 km from the fjord head — masked from **both** radars. The corridor plan (`fjordPlan`, waypoints straight from the BFS) kills the objective with *zero enemy detections all mission*: terrain denies the track, not the shot. Load the `fjord run` preset.
 
+## IFF & friendly fire (src/core/sensors.ts — identifyContact)
+
+Identification is deterministic and computed, never stored: a pure function of allegiance truth, transponder state, and track quality. A transponder-silent (`iffOn: false`) own-side aircraft is a **bogey** in its own side's contact table; VID quality (0.8) deliberately sits above every weapon's launch quality, so from a cold track the launch decision always ripens before the VID. The only things that save a silent friend are the squawk, ROE discipline, or geometry (detected far enough out that the VID beats the envelope). `validateLaunch` gains the `TARGET_FRIENDLY` interlock — an identified FRIEND is never clearable at any ROE — while an UNKNOWN bogey under FREE stays a legal shot: **weapons-free now has a price**. CAP fighters get intercept-to-identify for free: commit on the bogey, close, VID, break off (`tests/iff.test.ts`).
+
+## Point defense & decoys (CIWS + the ADM-160 Shrike)
+
+CIWS mounts get **one intercept attempt per tick** (nearest inbound first, seeded rolls, burst-limited magazine) — the engagement *rate* is the balance lever. A lone sea-skimming ASM eats ~4 attempts on approach and usually dies; a salvo timed to arrive together guarantees a leaker (saturation is arithmetic, not luck); fast SAM-class missiles cross the ring in 1–2 ticks and are nearly immune. Decoys are ordinary units — a Shrike drone wearing a Luneburg lens reads exactly like a loaded striker (3.0 m²) to the radar equation, and everything it does (cue radars, soak SAMs, trigger shoot-and-scoot) comes from existing systems. The `decoy sweep` preset beats the adaptive battery with zero SEAD shots: two drones buy both its missiles and its entire scoot posture.
+
+## The full nemesis axis set (src/campaign/campaign.ts)
+
+Every axis is evidence-keyed, legible, and proven both ways by test (`tests/nemesis-axes.test.ts`):
+
+- **Emitter hunt** — a BLUE airborne radar that painted RED is a one-way broadcast; next mission's CAP prioritizes radiating aircraft out to 1.6× its ring. Counter-counter: standoff orbits, passive IRST.
+- **Gap-filler radar** — RED lost units without ever holding a track on a BLUE aircraft ⇒ a gap-filler deploys at the theater's *surveyed shadow sites* (the fjord scenario surveys a real 7 m shoreline site the elevation data says covers five of six corridor waypoints). Counter-counter: the gap-filler radiates — one standoff Lance scares it dark and the corridor reopens.
+- **Point-defense alert** — a hull lost to an ASM ⇒ CIWS fitted fleet-wide; the lone-Pike standoff kill is over. Counter-counter: a three-Pike salvo arriving back-to-back.
+- **Decoy discrimination** — SAMs expended on drones ⇒ crews hold fire on slow, never-firing contacts outside self-defense range (a weapon release unmasks a creeping striker instantly). Counter-counter: decoys become *emissions bait* — they still cue the radar, and a reactive ARM at a live emitter buys the blink window back.
+
+## Campaign mission generator (src/campaign/generator.ts)
+
+`generateMission(missionNumber, nemesis, seed)` procedurally composes the strike problem — target set (C2 node, optional ammo-depot secondary), IADS layout, battery doctrine (ACTIVE/CUED, cue ring, shoot-and-scoot), and a deadline with one-replan slack. **Winnability is constructive**: every mission ships its own staff solution timed from the sampled geometry, built only on the sim's deterministic windows (ARM scares, scoot marches), so it survives every doctrine draw *and* every nemesis adaptation axis. Property tests hold it to zero-loss wins across seed sweeps against both the baseline and a fully hardened nemesis, while the straight-in plan draws fire on every seed. `nextCampaignMission` rotates the campaign: fresh problem, adapted staff, worn squadron. In the UI: the **generated strike** scenario, with the tasking brief in the campaign panel.
+
 ## 3D replay — phase 1 (web/replay3d.ts)
 
 A read-only Three.js view over the same recorded states the 2D map and scrubber use — no orders, no picking, no separate simulation, and the `three` bundle loads lazily only when the **3D** toggle is hit. Terrain ridges are extruded to their real footprint with ×6 vertical exaggeration (applied equally to unit altitudes, so "under the radar" reads on screen), engagement rings live on the ground plane and grey out when the emitter is down, and two camera families ship: an auto-orbiting overview that follows the action, and per-aircraft chase cams. The deck run is the money shot: chase Hammer 2 through the Koro corridor at 60 m with the lit rock face towering to starboard and the SAM ring waiting on the far side.
