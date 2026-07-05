@@ -20,13 +20,15 @@ export function rcsScaledRange(sensor: SensorDef, targetRcs: number): number {
  * the radar. Multiple jammers stack multiplicatively on the remaining range.
  */
 export function jammingFactor(state: SimState, radarOwner: Unit): number {
+  // Frequency-agile radars shrug off part of the jamming (nemesis-tunable).
+  const resistance = radarOwner.jamResistance ?? 0;
   let factor = 1;
   for (const unit of Object.values(state.units)) {
     if (!unit.alive || unit.side === radarOwner.side) continue;
     const jammer = unit.jammer;
     if (!jammer || !jammer.active) continue;
     if (dist3d(unit.pos, radarOwner.pos) <= jammer.range) {
-      factor *= 1 - jammer.strength;
+      factor *= 1 - jammer.strength * (1 - resistance);
     }
   }
   return factor;

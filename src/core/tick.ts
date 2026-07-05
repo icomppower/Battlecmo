@@ -1,4 +1,4 @@
-import type { MissileEntity, Order, SimState, Unit } from './types';
+import type { GroundDenialReason, GroundPhase, Order, SimState, Unit } from './types';
 import { dist2d, dist3d, stepToward } from './geometry';
 import { roll } from './rng';
 import {
@@ -30,6 +30,7 @@ export function tick(state: SimState, ordersLog: Order[], seed: number): SimStat
   moveUnitsAndBurnFuel(s);
   reactToInboundArms(s);
   flyMissiles(s, seed);
+  runGroundOp(s);
   updateContacts(s);
   runSamDoctrine(s);
   runDefensiveEngagements(s);
@@ -100,7 +101,120 @@ function applyOrders(s: SimState, ordersLog: Order[]): void {
         }
         break;
       }
+      case 'GROUND_INFIL':
+      case 'GROUND_BREACH':
+      case 'GROUND_EXFIL':
+        applyGroundOrder(s, order.type);
+        break;
     }
+  }
+}
+
+function groundPhase(s: SimState, phase: GroundPhase): void {
+  s.groundOp!.phase = phase;
+  s.events.push({ tick: s.tick, type: 'GROUND_PHASE', phase });
+}
+
+function applyGroundOrder(s: SimState, type: 'GROUND_INFIL' | 'GROUND_BREACH' | 'GROUND_EXFIL'): void {
+  const op = s.groundOp;
+  if (!op) return;
+  const deny = (reason: GroundDenialReason): void => {
+    s.events.push({ tick: s.tick, type: 'GROUND_DENIED', order: type, reason });
+  };
+  const team = s.units[op.teamUnitId];
+  if (!team?.alive) return deny('BAD_PHASE');
+  const site = s.units[op.hostageSiteId];
+
+  switch (type) {
+    case 'GROUND_INFIL': {
+      if (op.phase !== 'STAGED') return deny('BAD_PHASE');
+      team.waypoints = site ? [{ ...site.pos }] : [];
+      groundPhase(s, 'INFIL');
+      break;
+    }
+    case 'GROUND_BREACH': {
+      if (op.phase !== 'AT_TARGET') return deny('BAD_PHASE');
+      // The strike IS the go-code: breaching into a wired site gets the
+      // hostages killed, so the alarm/C2 net has to be down first.
+      const alarm = s.units[op.alarmNetUnitId];
+      if (alarm?.alive) return deny('ALARM_NET_UP');
+      if (s.tick >= op.hostageDeadlineTick) return deny('PAST_DEADLINE');
+      op.breachStartedTick = s.tick;
+      groundPhase(s, 'BREACHING');
+      break;
+    }
+    case 'GROUND_EXFIL': {
+      if (op.phase !== 'SECURED') return deny('BAD_PHASE');
+      team.waypoints = [{ ...op.lz }];
+      groundPhase(s, 'EXFIL');
+      break;
+    }
+  }
+}
+
+/**
+ * Ground extraction phase machine (build order step 4) — Breach Protocol's
+ * ground op, abstracted onto the shared mission clock. One clock, every
+ * domain: a late SEAD window delays the strike, which delays the breach
+ * go-code, and the hostage clock does not care.
+ */
+function runGroundOp(s: SimState): void {
+  const op = s.groundOp;
+  if (!op || op.phase === 'EXTRACTED' || op.phase === 'COMPROMISED') return;
+  const team = s.units[op.teamUnitId];
+  const helo = s.units[op.heloUnitId];
+  const site = s.units[op.hostageSiteId];
+
+  // The hostage clock runs regardless of how the air war is going.
+  if (s.tick >= op.hostageDeadlineTick && op.phase !== 'SECURED' && op.phase !== 'EXFIL') {
+    s.events.push({ tick: s.tick, type: 'HOSTAGE_CLOCK_EXPIRED' });
+    groundPhase(s, 'COMPROMISED');
+    return;
+  }
+
+  // Losing the helo with everyone aboard ends the op — and the roster.
+  if (op.teamAboardHelo && (!helo || !helo.alive)) {
+    if (team) team.alive = false;
+    for (const operator of op.roster) operator.status = 'KIA';
+    groundPhase(s, 'COMPROMISED');
+    return;
+  }
+
+  if (!team?.alive) {
+    groundPhase(s, 'COMPROMISED');
+    return;
+  }
+
+  if (op.teamAboardHelo && helo) {
+    team.pos = { ...helo.pos }; // riding along
+    if (helo.pos.x <= op.extractionSafeX) {
+      groundPhase(s, 'EXTRACTED');
+      s.events.push({ tick: s.tick, type: 'TEAM_EXTRACTED', count: op.hostageCount });
+    }
+    return;
+  }
+
+  switch (op.phase) {
+    case 'INFIL':
+      if (site && dist2d(team.pos, site.pos) <= 100) groundPhase(s, 'AT_TARGET');
+      break;
+    case 'BREACHING':
+      if (s.tick - op.breachStartedTick! >= op.breachTicksRequired) {
+        groundPhase(s, 'SECURED');
+        s.events.push({ tick: s.tick, type: 'HOSTAGES_SECURED', count: op.hostageCount });
+      }
+      break;
+    case 'EXFIL':
+      if (
+        helo?.alive &&
+        dist2d(team.pos, helo.pos) <= 200 &&
+        helo.pos.alt <= 60 &&
+        dist2d(helo.pos, op.lz) <= 400
+      ) {
+        op.teamAboardHelo = true;
+        s.events.push({ tick: s.tick, type: 'TEAM_ABOARD', heloId: helo.id });
+      }
+      break;
   }
 }
 
@@ -351,9 +465,16 @@ function runSamDoctrine(s: SimState): void {
 
     // EMCON discipline.
     if (doctrine.emcon === 'CUED') {
+      // Only air tracks cue an air-defense battery — a ground blip is not
+      // this radar's problem.
       const cued = Object.values(s.contacts[unit.side]).some((c) => {
         const target = s.units[c.targetId];
-        return target?.alive && dist2d(unit.pos, target.pos) <= (doctrine.cueRange ?? Infinity);
+        return (
+          target?.alive &&
+          target.domain === 'AIR' &&
+          target.pos.alt >= (doctrine.cueMinAlt ?? 0) &&
+          dist2d(unit.pos, target.pos) <= (doctrine.cueRange ?? Infinity)
+        );
       });
       if (cued) unit.lastCuedTick = s.tick;
       const cueFresh =
@@ -383,12 +504,15 @@ function runDefensiveEngagements(s: SimState): void {
     const limit = unit.maxConcurrentEngagements;
     if (limit === undefined || limit <= 0) continue;
 
-    // A SAM battery needs its own radar up to guide — a suppressed or silent
-    // emitter cannot shoot, which is the whole point of the SEAD window.
+    // A shooter needs a live sensor of its own to guide: a radar battery
+    // that is suppressed or silent cannot shoot (the whole point of the
+    // SEAD window), while an IR/visual shooter (MANPADS team) needs no
+    // emitter at all.
     const hasLiveRadar =
       !isSuppressed(unit, s.tick) &&
       unit.sensors.some((se) => se.kind === 'RADAR' && se.emitting);
-    if (!hasLiveRadar) continue;
+    const hasPassiveSensor = unit.sensors.some((se) => se.kind !== 'RADAR');
+    if (!hasLiveRadar && !hasPassiveSensor) continue;
 
     let inFlight = Object.values(s.missiles).filter(
       (m) => m.alive && m.shooterId === unit.id,

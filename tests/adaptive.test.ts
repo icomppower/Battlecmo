@@ -3,7 +3,7 @@ import { run } from '../src/core/tick';
 import type { Order } from '../src/core/types';
 import { buildAdaptiveStrikeScenario } from '../src/scenarios/strike-adaptive';
 import { miniState, plane, radarSite } from './helpers';
-import { baitAndBlinkPlan, goodPlan } from './plans';
+import { baitAndBlinkPlan, goodPlan } from '../src/scenarios/plans';
 
 const SEED = 42;
 

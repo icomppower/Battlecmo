@@ -31,6 +31,8 @@ export interface RenderOptions {
    * this package that would re-find it.
    */
   briefedPositions: Record<string, Vec3>;
+  /** Extraction LZ marker, when the mission carries a ground op. */
+  lz: Vec3 | null;
 }
 
 const COLORS = {
@@ -89,6 +91,7 @@ export class Renderer {
     this.drawJammerCoverage(ctx, state, view);
     this.drawThreatRings(ctx, state, view, opts);
     this.drawWaypoints(ctx, state, view, opts);
+    if (opts.lz) this.drawLz(ctx, view, opts.lz);
     this.drawMissiles(ctx, state, prev, view);
     this.drawUnits(ctx, state, prev, view, opts);
     this.drawScaleBar(ctx, view);
@@ -294,8 +297,30 @@ export class Renderer {
         ctx.stroke();
       }
 
-      if (u.domain === 'AIR') {
+      if (u.domain === 'AIR' && u.maxSpeed < 120) {
+        // Rotary-wing: rotor disc over a hull bar.
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(sx - 8, sy);
+        ctx.lineTo(sx + 8, sy);
+        ctx.stroke();
+      } else if (u.domain === 'AIR') {
         this.drawAircraft(ctx, sx, sy, this.headingOf(u, prev), color);
+      } else if (u.side === 'BLUE') {
+        // Friendly ground element: small filled block (infantry wedge kin).
+        ctx.fillStyle = color;
+        ctx.fillRect(sx - 4, sy - 4, 8, 8);
+        ctx.strokeStyle = COLORS.bg;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(sx - 4, sy + 4);
+        ctx.lineTo(sx, sy - 1);
+        ctx.lineTo(sx + 4, sy + 4);
+        ctx.stroke();
       } else {
         this.drawGroundSite(ctx, sx, sy, u, color);
       }
@@ -428,6 +453,20 @@ export class Renderer {
     ctx.globalAlpha = 0.85;
     ctx.fillText(text, align === 'left' ? sx + 12 : sx, sy + 3 + (align === 'center' ? 12 : 0));
     ctx.globalAlpha = 1;
+  }
+
+  private drawLz(ctx: CanvasRenderingContext2D, view: View, lz: Vec3): void {
+    const [sx, sy] = this.toScreen(view, lz);
+    ctx.strokeStyle = COLORS.green;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 7, 0, Math.PI * 2);
+    ctx.moveTo(sx - 4, sy - 4);
+    ctx.lineTo(sx + 4, sy + 4);
+    ctx.moveTo(sx + 4, sy - 4);
+    ctx.lineTo(sx - 4, sy + 4);
+    ctx.stroke();
+    this.label(ctx, sx, sy, 'LZ', COLORS.green);
   }
 
   private drawScaleBar(ctx: CanvasRenderingContext2D, view: View): void {

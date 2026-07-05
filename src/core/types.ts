@@ -89,6 +89,12 @@ export interface SamDoctrine {
   emcon: 'ACTIVE' | 'CUED';
   /** CUED: light up when an own-side contact is within this range (m). */
   cueRange?: number;
+  /**
+   * CUED: ignore contacts below this altitude when deciding to light up.
+   * This is the nemesis counter to low-altitude bait runs — a crew that got
+   * burned radiating at an unengageable target stops taking that cue.
+   */
+  cueMinAlt?: number;
   /** CUED: go cold again after this many ticks without a cue (default 30). */
   coldAfterTicks?: number;
   /** Shoot-and-scoot: relocate after firing this many missiles. */
@@ -115,6 +121,11 @@ export interface Unit {
   jammer?: JammerDef;
   emitterDoctrine?: EmitterDoctrine;
   samDoctrine?: SamDoctrine;
+  /**
+   * 0..1 — how much of an enemy jammer's strength this unit's radars shrug
+   * off (frequency agility / burn-through upgrades). Nemesis-tunable.
+   */
+  jamResistance?: number;
   /** Radar forced dark until this tick (SEAD suppression / ARM reaction). */
   suppressedUntilTick?: number;
   /** Survived ARM scares — drives EmitterDoctrine.shutdownDecay. */
@@ -162,6 +173,54 @@ export interface Contact {
  */
 export type RoeLevel = 'HOLD' | 'TIGHT' | 'FREE';
 
+// ---------------------------------------------------------------------------
+// Ground extraction layer (build order step 4) — the Breach Protocol tie-in.
+// The ground team is imported as a roster, runs a phase machine on the same
+// mission clock as the air war, and is coupled to it in both directions:
+// the breach is gated on the strike (alarm net down) and the exfil helicopter
+// is gated on the threat picture the air war shaped.
+// ---------------------------------------------------------------------------
+
+/** One Breach Protocol operator, as imported/exported between the games. */
+export interface Operator {
+  id: string;
+  name: string;
+  status: 'OK' | 'WOUNDED' | 'KIA';
+  missions: number;
+}
+
+export type GroundPhase =
+  | 'STAGED'
+  | 'INFIL'
+  | 'AT_TARGET'
+  | 'BREACHING'
+  | 'SECURED'
+  | 'EXFIL'
+  | 'EXTRACTED'
+  | 'COMPROMISED';
+
+export interface GroundOp {
+  teamUnitId: string;
+  heloUnitId: string;
+  /** Unit id of the hostage site (non-combat RED ground unit). */
+  hostageSiteId: string;
+  /** Breach is gated on this unit being destroyed (the alarm/C2 net). */
+  alarmNetUnitId: string;
+  lz: Vec3;
+  phase: GroundPhase;
+  breachTicksRequired: number;
+  breachStartedTick?: number;
+  /** The hostage clock: breach must COMPLETE before this tick. */
+  hostageDeadlineTick: number;
+  hostageCount: number;
+  teamAboardHelo: boolean;
+  /** Helo (team aboard) west of this x ⇒ extraction complete. */
+  extractionSafeX: number;
+  roster: Operator[];
+}
+
+export type GroundDenialReason = 'BAD_PHASE' | 'ALARM_NET_UP' | 'PAST_DEADLINE';
+
 export type SimEvent =
   | { tick: number; type: 'DETECTION'; side: Side; sensorUnitId: string; targetId: string }
   | { tick: number; type: 'CONTACT_LOST'; side: Side; targetId: string }
@@ -178,7 +237,13 @@ export type SimEvent =
   | { tick: number; type: 'BINGO_FUEL'; unitId: string }
   | { tick: number; type: 'FUEL_EXHAUSTED'; unitId: string }
   | { tick: number; type: 'JAMMER_SET'; unitId: string; active: boolean }
-  | { tick: number; type: 'ROE_SET'; side: Side; level: RoeLevel };
+  | { tick: number; type: 'ROE_SET'; side: Side; level: RoeLevel }
+  | { tick: number; type: 'GROUND_PHASE'; phase: GroundPhase }
+  | { tick: number; type: 'GROUND_DENIED'; order: string; reason: GroundDenialReason }
+  | { tick: number; type: 'HOSTAGES_SECURED'; count: number }
+  | { tick: number; type: 'HOSTAGE_CLOCK_EXPIRED' }
+  | { tick: number; type: 'TEAM_ABOARD'; heloId: string }
+  | { tick: number; type: 'TEAM_EXTRACTED'; count: number };
 
 export type LaunchDenialReason =
   | 'ROE_HOLD'
@@ -194,7 +259,10 @@ export type Order =
   | { atTick: number; type: 'SET_ROE'; side: Side; level: RoeLevel }
   | { atTick: number; type: 'SET_JAMMER'; unitId: string; active: boolean }
   | { atTick: number; type: 'ENGAGE'; unitId: string; weaponId: string; targetId: string }
-  | { atTick: number; type: 'RTB'; unitId: string };
+  | { atTick: number; type: 'RTB'; unitId: string }
+  | { atTick: number; type: 'GROUND_INFIL' }
+  | { atTick: number; type: 'GROUND_BREACH' }
+  | { atTick: number; type: 'GROUND_EXFIL' };
 
 export interface SimState {
   /** Current tick. One tick = one second of mission time. */
@@ -209,4 +277,6 @@ export interface SimState {
   /** Monotonic counter for deterministic entity id generation. */
   nextEntitySeq: number;
   weaponCatalog: Record<string, WeaponDef>;
+  /** Present when the mission carries a ground extraction op. */
+  groundOp?: GroundOp;
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { run, tick } from '../src/core/tick';
 import { buildStrikeScenario } from '../src/scenarios/strike-basic';
-import { goodPlan } from './plans';
+import { goodPlan } from '../src/scenarios/plans';
 
 describe('deterministic tick core', () => {
   it('same seed + same orders log ⇒ byte-identical state', () => {

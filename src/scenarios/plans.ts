@@ -1,4 +1,4 @@
-import type { Order } from '../src/core/types';
+import type { Order } from '../core/types';
 
 /**
  * Scripted mission plans against the strike-basic scenario. These are what
@@ -80,6 +80,64 @@ export function baitAndBlinkPlan(): Order[] {
       { x: -60_000, y: -3_000, alt: 60 },
       { x: -140_000, y: -3_000, alt: 8_000 },
     ] },
+  ];
+}
+
+/**
+ * Full rescue-op plan (rescue-op scenario): bait-and-blink air war, with the
+ * two extra DMPIs and the ground timeline threaded through it —
+ *
+ *   air:    bait low (t0) → radar up (~418) → reactive ARM (430) → blink
+ *           (~513–753) → Hammer 2 releases on the C2 node (615) → bait
+ *           creeps south and kills the MANPADS guard so the LZ is safe
+ *   ground: team infils from t0 → holds AT_TARGET until the C2 node dies
+ *           (~713, the go-code) → breach 730 → secured 820 (deadline 1000)
+ *           → exfil to LZ → helo (launched t300, nap-of-the-earth) boards
+ *           them (~1003) → out west (~1514)
+ */
+export function rescuePlan(): Order[] {
+  return [
+    { atTick: 0, type: 'SET_ROE', side: 'BLUE', level: 'TIGHT' },
+    { atTick: 0, type: 'SET_JAMMER', unitId: 'blue-ea-1', active: true },
+    { atTick: 0, type: 'GROUND_INFIL' },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-sead-1', waypoints: [{ x: -64_000, y: 2_000, alt: 9_000 }] },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [
+      { x: -50_000, y: -3_000, alt: 60 },
+      { x: -33_000, y: -3_000, alt: 60 },
+    ] },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [{ x: -50_000, y: 3_000, alt: 8_000 }] },
+    { atTick: 300, type: 'SET_WAYPOINTS', unitId: 'blue-helo-1', waypoints: [{ x: 500, y: -13_500, alt: 30 }] },
+    { atTick: 430, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'arm-lance', targetId: 'red-sam-1' },
+    { atTick: 515, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [{ x: -27_000, y: 3_000, alt: 8_000 }] },
+    // The bait repositions south (still on the deck) to service the MANPADS.
+    { atTick: 520, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: -20_000, y: -9_000, alt: 60 }] },
+    { atTick: 585, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'agm-stormbreak', targetId: 'red-guard-1' },
+    { atTick: 586, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'agm-stormbreak', targetId: 'red-guard-1' },
+    { atTick: 615, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'agm-stormbreak', targetId: 'red-hq' },
+    { atTick: 616, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'agm-stormbreak', targetId: 'red-hq' },
+    { atTick: 620, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [{ x: -140_000, y: 3_000, alt: 8_000 }] },
+    { atTick: 730, type: 'GROUND_BREACH' },
+    { atTick: 825, type: 'GROUND_EXFIL' },
+    { atTick: 900, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [
+      { x: -60_000, y: -9_000, alt: 60 },
+      { x: -140_000, y: -3_000, alt: 8_000 },
+    ] },
+    { atTick: 1_010, type: 'SET_WAYPOINTS', unitId: 'blue-helo-1', waypoints: [{ x: -40_000, y: 10_000, alt: 30 }] },
+  ];
+}
+
+/** Ground op with no air support: the breach gate never opens, the clock runs out. */
+export function rescueNoStrikePlan(): Order[] {
+  return [
+    { atTick: 0, type: 'GROUND_INFIL' },
+    { atTick: 500, type: 'GROUND_BREACH' }, // denied — alarm net still up
+  ];
+}
+
+/** Send the helo to the LZ without killing the MANPADS guard first. */
+export function heloRecklessPlan(): Order[] {
+  return [
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-helo-1', waypoints: [{ x: 500, y: -13_500, alt: 30 }] },
   ];
 }
 

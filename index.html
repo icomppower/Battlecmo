@@ -77,9 +77,9 @@
       margin: 0 0 6px; font-size: 11px; letter-spacing: 0.12em;
       color: var(--dim); text-transform: uppercase; font-weight: 700;
     }
-    #unitpanel .row { display: flex; justify-content: space-between; margin: 2px 0; }
-    #unitpanel .row .k { color: var(--dim); }
-    #unitpanel .actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+    aside .row { display: flex; justify-content: space-between; margin: 2px 0; }
+    aside .row .k { color: var(--dim); }
+    aside .actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
     #eventlog { flex: 1; overflow-y: auto; padding: 8px 12px; min-height: 0; }
     #eventlog .ev { margin: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     #eventlog .t { color: var(--dim); }
@@ -95,6 +95,25 @@
     .fuelbar { height: 5px; background: #1a2230; border-radius: 2px; overflow: hidden; margin-top: 2px; }
     .fuelbar > div { height: 100%; background: var(--green); }
     .fuelbar.low > div { background: var(--amber); }
+    #orderlist .ord { display: flex; gap: 6px; align-items: center; margin: 1px 0; }
+    #orderlist .ord button { padding: 0 6px; font-size: 10px; }
+    #orderlist .ord .desc { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--dim); }
+    #caption {
+      position: absolute; bottom: 42px; left: 50%; transform: translateX(-50%);
+      max-width: 70%; text-align: center; font-size: 15px; color: #e8eef7;
+      text-shadow: 0 1px 4px #000; pointer-events: none; letter-spacing: 0.02em;
+    }
+    #debriefoverlay {
+      position: absolute; inset: 0; display: none;
+      background: rgba(5, 8, 12, 0.82); z-index: 10;
+    }
+    #debriefoverlay.open { display: block; }
+    #debriefoverlay .sheet {
+      position: absolute; inset: 24px; background: var(--panel);
+      border: 1px solid var(--panel-border); border-radius: 6px;
+      padding: 16px 20px; overflow-y: auto;
+    }
+    #debrieftext { white-space: pre-wrap; font-size: 12px; line-height: 1.5; margin: 0; }
   </style>
 </head>
 <body>
@@ -121,10 +140,13 @@
       <select id="scenario">
         <option value="strike-basic">strike-basic (static IADS)</option>
         <option value="strike-adaptive">strike-adaptive (EMCON + scoot)</option>
+        <option value="rescue-op">rescue-op (full multi-domain)</option>
       </select>
     </div>
     <div class="group">
       <button id="godview">TRUTH VIEW</button>
+      <button id="replay">▶ REPLAY</button>
+      <button id="debrief">DEBRIEF</button>
       <button id="reset">RESET MISSION</button>
     </div>
   </header>
@@ -136,8 +158,37 @@
         click: select unit · right-click: waypoint (shift: append) ·<br/>
         drag: pan · wheel: zoom
       </div>
+      <div id="caption"></div>
+      <div id="debriefoverlay">
+        <div class="sheet">
+          <button id="debriefclose" style="float:right;">CLOSE</button>
+          <pre id="debrieftext"></pre>
+        </div>
+      </div>
     </div>
     <aside>
+      <section id="planner">
+        <h3>Planner</h3>
+        <div class="group" style="margin-bottom:6px;">
+          <select id="preset" style="flex:1;">
+            <option value="">— load a preset plan —</option>
+            <option value="good">good plan (strike-basic)</option>
+            <option value="naive">naive plan (strike-basic)</option>
+            <option value="jamonly">jam-only (strike-basic)</option>
+            <option value="baitblink">bait &amp; blink (strike-adaptive)</option>
+            <option value="rescue">full rescue (rescue-op)</option>
+          </select>
+          <button id="runend">RUN ►►</button>
+        </div>
+        <div class="group" style="margin-bottom:6px; color:var(--dim);">
+          issue orders at now +
+          <input id="orderdelay" type="number" min="0" max="3600" value="0"
+                 style="width:60px; background:#17202e; color:var(--text); border:1px solid #263349; border-radius:4px; font:inherit; padding:2px 4px;" />
+          s
+        </div>
+        <div id="orderlist" style="max-height:130px; overflow-y:auto; font-size:11px;"></div>
+      </section>
+      <section id="groundpanel" style="display:none;"></section>
       <section id="unitpanel"><h3>No unit selected</h3></section>
       <section style="flex:1; display:flex; flex-direction:column; min-height:0; padding:0;">
         <h3 style="padding:10px 12px 0;">Mission log</h3>

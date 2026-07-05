@@ -2,14 +2,33 @@ import { tick } from '../src/core/tick';
 import { validateLaunch } from '../src/core/weapons';
 import { buildStrikeScenario } from '../src/scenarios/strike-basic';
 import { buildAdaptiveStrikeScenario } from '../src/scenarios/strike-adaptive';
+import { buildRescueScenario } from '../src/scenarios/rescue-op';
+import {
+  baitAndBlinkPlan,
+  goodPlan,
+  jamOnlyPlan,
+  naivePlan,
+  rescuePlan,
+} from '../src/scenarios/plans';
+import { generateDebrief } from '../src/replay/debrief';
 import type { Order, RoeLevel, SimEvent, SimState, Vec3 } from '../src/core/types';
 import { Renderer, type View } from './render';
 
 const SEED = 42;
+const MAX_RUN_TICKS = 1_800;
 
 const SCENARIOS: Record<string, () => SimState> = {
   'strike-basic': buildStrikeScenario,
   'strike-adaptive': buildAdaptiveStrikeScenario,
+  'rescue-op': buildRescueScenario,
+};
+
+const PRESETS: Record<string, { plan: () => Order[]; scenario: string }> = {
+  good: { plan: goodPlan, scenario: 'strike-basic' },
+  naive: { plan: naivePlan, scenario: 'strike-basic' },
+  jamonly: { plan: jamOnlyPlan, scenario: 'strike-basic' },
+  baitblink: { plan: baitAndBlinkPlan, scenario: 'strike-adaptive' },
+  rescue: { plan: rescuePlan, scenario: 'rescue-op' },
 };
 
 /**
@@ -49,8 +68,20 @@ class Timeline {
   }
 
   issue(order: Order): void {
-    this.states.length = this.cursor + 1; // the future is now unwritten
+    this.invalidateFrom(order.atTick);
     this.orders.push(order);
+  }
+
+  removeOrder(index: number): void {
+    const [removed] = this.orders.splice(index, 1);
+    if (removed) this.invalidateFrom(removed.atTick);
+  }
+
+  /** Drop every cached state that could have seen tick `t`'s orders. */
+  invalidateFrom(t: number): void {
+    const keep = Math.min(this.states.length, Math.max(1, t + 1));
+    this.states.length = keep;
+    this.cursor = Math.min(this.cursor, keep - 1);
   }
 
   scrub(to: number): void {
@@ -84,6 +115,8 @@ const view: View = { cx: -60_000, cy: 0, scale: 0.006 };
 let speed = 0; // ticks per real second (0 = paused)
 let godView = false;
 let selectedId: string | null = null;
+/** Cinematic replay: auto-camera + captions; any manual input cancels it. */
+let cinematic = false;
 
 // ---- canvas sizing ----------------------------------------------------------
 
@@ -103,6 +136,7 @@ let lastMouse: [number, number] = [0, 0];
 
 canvas.addEventListener('mousedown', (e) => {
   if (e.button !== 0) return;
+  cinematic = false;
   dragging = true;
   dragMoved = false;
   lastMouse = [e.offsetX, e.offsetY];
@@ -139,19 +173,40 @@ window.addEventListener('mouseup', (e) => {
   selectedId = best;
 });
 
+/** Planner offset: orders authored now can be scheduled for later. */
+function orderDelay(): number {
+  const el = document.getElementById('orderdelay') as HTMLInputElement;
+  return Math.max(0, Math.floor(Number(el.value) || 0));
+}
+
+type OrderDraft = Order extends infer O ? (O extends Order ? Omit<O, 'atTick'> : never) : never;
+
+function issueAt(order: OrderDraft): void {
+  const atTick = timeline.current.tick + orderDelay();
+  timeline.issue({ ...order, atTick } as Order);
+  if (orderDelay() === 0) timeline.advance(); // instant orders show immediately
+}
+
 canvas.addEventListener('contextmenu', (e) => {
   e.preventDefault();
+  cinematic = false;
   const state = timeline.current;
   const unit = selectedId ? state.units[selectedId] : null;
   if (!unit || !unit.alive || unit.side !== 'BLUE' || unit.maxSpeed <= 0) return;
   const w = renderer.toWorld(view, e.offsetX, e.offsetY);
   const wp = { x: w.x, y: w.y, alt: unit.pos.alt };
   const waypoints = e.shiftKey ? [...unit.waypoints, wp] : [wp];
-  timeline.issue({ atTick: state.tick, type: 'SET_WAYPOINTS', unitId: unit.id, waypoints });
+  timeline.issue({
+    atTick: state.tick + orderDelay(),
+    type: 'SET_WAYPOINTS',
+    unitId: unit.id,
+    waypoints,
+  });
 });
 
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
+  cinematic = false;
   const before = renderer.toWorld(view, e.offsetX, e.offsetY);
   const factor = e.deltaY < 0 ? 1.2 : 1 / 1.2;
   view.scale = Math.min(0.25, Math.max(0.0008, view.scale * factor));
@@ -176,14 +231,7 @@ document.getElementById('step')!.addEventListener('click', () => {
 const roeButtons = [...document.querySelectorAll<HTMLButtonElement>('#roe [data-roe]')];
 for (const btn of roeButtons) {
   btn.addEventListener('click', () => {
-    timeline.issue({
-      atTick: timeline.current.tick,
-      type: 'SET_ROE',
-      side: 'BLUE',
-      level: btn.dataset.roe as RoeLevel,
-    });
-    timeline.advance(); // apply immediately so the UI reflects the change
-    speedAfterOrder();
+    issueAt({ type: 'SET_ROE', side: 'BLUE', level: btn.dataset.roe as RoeLevel });
   });
 }
 
@@ -204,9 +252,116 @@ scenarioSelect.addEventListener('change', () => {
   speed = 0;
 });
 
-/** Orders issued while paused shouldn't silently unpause. */
-function speedAfterOrder(): void {
-  if (speed === 0) timeline.scrub(timeline.cursor); // no-op, keeps intent obvious
+document.getElementById('replay')!.addEventListener('click', () => {
+  timeline.scrub(0);
+  cinematic = true;
+  speed = 4;
+});
+
+document.getElementById('debrief')!.addEventListener('click', () => {
+  const text = generateDebrief(
+    timeline.states[timeline.states.length - 1]!,
+    `OVERWATCH DIRECTIVE — ${scenarioSelect.value}`,
+  );
+  document.getElementById('debrieftext')!.textContent = text;
+  document.getElementById('debriefoverlay')!.classList.add('open');
+});
+document.getElementById('debriefclose')!.addEventListener('click', () => {
+  document.getElementById('debriefoverlay')!.classList.remove('open');
+});
+
+// ---- planner ----------------------------------------------------------
+
+const presetSelect = document.getElementById('preset') as HTMLSelectElement;
+presetSelect.addEventListener('change', () => {
+  const preset = PRESETS[presetSelect.value];
+  if (!preset) return;
+  scenarioSelect.value = preset.scenario;
+  timeline.reset(SCENARIOS[preset.scenario]!);
+  timeline.orders = preset.plan();
+  selectedId = null;
+  speed = 0;
+});
+
+document.getElementById('runend')!.addEventListener('click', () => {
+  // Scrub the plan: compute to the end instantly, then review on the timeline.
+  const start = timeline.states.length;
+  for (let i = start; i <= MAX_RUN_TICKS; i++) timeline.advance();
+  speed = 0;
+});
+
+const orderList = document.getElementById('orderlist')!;
+orderList.addEventListener('click', (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-del]');
+  if (!btn) return;
+  timeline.removeOrder(Number(btn.dataset.del));
+});
+
+function describeOrder(o: Order): string {
+  switch (o.type) {
+    case 'SET_WAYPOINTS':
+      return `${o.unitId} → ${o.waypoints.map((w) => `(${Math.round(w.x / 1000)},${Math.round(w.y / 1000)})`).join(' ')}`;
+    case 'SET_ROE':
+      return `ROE ${o.side} ${o.level}`;
+    case 'SET_JAMMER':
+      return `${o.unitId} jammer ${o.active ? 'ON' : 'OFF'}`;
+    case 'ENGAGE':
+      return `${o.unitId} ${o.weaponId} → ${o.targetId}`;
+    case 'RTB':
+      return `${o.unitId} RTB`;
+    case 'GROUND_INFIL':
+      return 'ground: INFIL';
+    case 'GROUND_BREACH':
+      return 'ground: BREACH';
+    case 'GROUND_EXFIL':
+      return 'ground: EXFIL';
+  }
+}
+
+function renderOrderList(): string {
+  const indexed = timeline.orders.map((o, i) => ({ o, i }));
+  indexed.sort((a, b) => a.o.atTick - b.o.atTick || a.i - b.i);
+  if (indexed.length === 0) return '<div style="color:var(--dim)">no orders scheduled</div>';
+  return indexed
+    .map(
+      ({ o, i }) =>
+        `<div class="ord"><span class="t">${fmtClock(o.atTick)}</span>` +
+        `<span class="desc">${esc(describeOrder(o))}</span>` +
+        `<button data-del="${i}">✕</button></div>`,
+    )
+    .join('');
+}
+
+// ---- ground op panel ----------------------------------------------------------
+
+const groundPanel = document.getElementById('groundpanel')!;
+groundPanel.addEventListener('click', (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-ground]');
+  if (!btn) return;
+  issueAt({ type: btn.dataset.ground as 'GROUND_INFIL' | 'GROUND_BREACH' | 'GROUND_EXFIL' });
+});
+
+function renderGroundPanel(state: SimState): string {
+  const op = state.groundOp;
+  if (!op) return '';
+  const remaining = op.hostageDeadlineTick - state.tick;
+  const clockText =
+    op.phase === 'SECURED' || op.phase === 'EXFIL' || op.phase === 'EXTRACTED'
+      ? 'secured'
+      : remaining > 0
+        ? `${fmtClock(remaining)} remaining`
+        : 'EXPIRED';
+  const rows = [
+    `<h3>Ground op — ${op.phase}</h3>`,
+    `<div class="row"><span class="k">hostage clock</span><span>${clockText}</span></div>`,
+    `<div class="row"><span class="k">team</span><span>${op.roster.filter((o) => o.status !== 'KIA').length}/${op.roster.length} up</span></div>`,
+    `<div class="actions">` +
+      `<button data-ground="GROUND_INFIL" ${op.phase !== 'STAGED' ? 'disabled' : ''}>INFIL</button>` +
+      `<button data-ground="GROUND_BREACH" ${op.phase !== 'AT_TARGET' ? 'disabled' : ''}>BREACH</button>` +
+      `<button data-ground="GROUND_EXFIL" ${op.phase !== 'SECURED' ? 'disabled' : ''}>EXFIL</button>` +
+      `</div>`,
+  ];
+  return rows.join('');
 }
 
 // ---- scrubber ----------------------------------------------------------
@@ -223,31 +378,24 @@ const unitPanel = document.getElementById('unitpanel')!;
 unitPanel.addEventListener('click', (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
   if (!btn) return;
-  const state = timeline.current;
-  const t = state.tick;
   switch (btn.dataset.action) {
     case 'engage':
-      timeline.issue({
-        atTick: t,
+      issueAt({
         type: 'ENGAGE',
         unitId: btn.dataset.unit!,
         weaponId: btn.dataset.weapon!,
         targetId: btn.dataset.target!,
       });
-      timeline.advance();
       break;
     case 'jammer':
-      timeline.issue({
-        atTick: t,
+      issueAt({
         type: 'SET_JAMMER',
         unitId: btn.dataset.unit!,
         active: btn.dataset.active === 'true',
       });
-      timeline.advance();
       break;
     case 'rtb':
-      timeline.issue({ atTick: t, type: 'RTB', unitId: btn.dataset.unit! });
-      timeline.advance();
+      issueAt({ type: 'RTB', unitId: btn.dataset.unit! });
       break;
   }
 });
@@ -361,6 +509,18 @@ function formatEvent(e: SimEvent, state: SimState): { text: string; cls: string 
       return godView ? { text: `${name(e.unitId)} redeployed`, cls: 'red' } : null;
     case 'ROE_SET':
       return e.side === 'BLUE' ? { text: `ROE set to ${e.level}`, cls: 'blue' } : null;
+    case 'GROUND_PHASE':
+      return { text: `ground element: ${e.phase}`, cls: 'blue' };
+    case 'GROUND_DENIED':
+      return { text: `ground order ${e.order} refused (${e.reason})`, cls: 'warn' };
+    case 'HOSTAGES_SECURED':
+      return { text: `site secured — ${e.count} hostages recovered`, cls: 'good' };
+    case 'HOSTAGE_CLOCK_EXPIRED':
+      return { text: 'HOSTAGE CLOCK EXPIRED — site compromised', cls: 'red' };
+    case 'TEAM_ABOARD':
+      return { text: `team aboard ${name(e.heloId)}`, cls: 'good' };
+    case 'TEAM_EXTRACTED':
+      return { text: `EXTRACTION COMPLETE — ${e.count} hostages out`, cls: 'good' };
   }
 }
 
@@ -373,12 +533,56 @@ function fmtClock(t: number): string {
 // ---- outcome banner ----------------------------------------------------------
 
 function missionOutcome(state: SimState): { cls: string; text: string } | null {
+  if (state.groundOp) {
+    if (state.groundOp.phase === 'EXTRACTED') {
+      return { cls: 'success', text: `MISSION SUCCESS — ${state.groundOp.hostageCount} HOSTAGES EXTRACTED` };
+    }
+    if (state.groundOp.phase === 'COMPROMISED') {
+      return { cls: 'failure', text: 'MISSION FAILED — SITE COMPROMISED' };
+    }
+    return null; // rescue verdict waits for the ground op
+  }
   if (!state.units['red-hq']!.alive) {
     return { cls: 'success', text: 'MISSION SUCCESS — OBJECTIVE DESTROYED' };
   }
   const strikersDead = ['blue-striker-1', 'blue-striker-2'].every((id) => !state.units[id]!.alive);
   if (strikersDead) return { cls: 'failure', text: 'MISSION FAILED — STRIKE ELEMENT LOST' };
   return null;
+}
+
+/**
+ * Cinematic auto-camera: track the missiles if any are flying, otherwise the
+ * maneuvering friendlies. Ease toward the target framing each frame.
+ */
+function updateCinematicCamera(state: SimState): void {
+  const pts: { x: number; y: number }[] = [];
+  for (const m of Object.values(state.missiles)) {
+    if (!m.alive) continue;
+    pts.push(m.pos);
+    const t = state.units[m.targetId];
+    if (t) pts.push(t.pos);
+  }
+  if (pts.length === 0) {
+    for (const u of Object.values(state.units)) {
+      if (u.alive && u.side === 'BLUE' && u.domain === 'AIR' && u.waypoints.length > 0) pts.push(u.pos);
+    }
+  }
+  if (pts.length === 0) {
+    for (const u of Object.values(state.units)) if (u.alive) pts.push(u.pos);
+  }
+  if (pts.length === 0) return;
+
+  const xs = pts.map((p) => p.x);
+  const ys = pts.map((p) => p.y);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+  const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const spanX = Math.max(...xs) - Math.min(...xs) + 30_000;
+  const spanY = Math.max(...ys) - Math.min(...ys) + 30_000;
+  const targetScale = Math.min(0.03, Math.max(0.0025, Math.min(canvas.width / spanX, canvas.height / spanY)));
+
+  view.cx += (cx - view.cx) * 0.05;
+  view.cy += (cy - view.cy) * 0.05;
+  view.scale += (targetScale - view.scale) * 0.03;
 }
 
 // ---- main loop ----------------------------------------------------------
@@ -406,12 +610,37 @@ function frame(now: number): void {
   }
 
   const state = timeline.current;
+  if (cinematic) {
+    updateCinematicCamera(state);
+    if (timeline.cursor >= timeline.states.length - 1 && speed > 0) {
+      // Replay caught up to the head of recorded history — hold there.
+      speed = timeline.states.length > 1 ? 0 : speed;
+      if (speed === 0) cinematic = false;
+    }
+  }
   renderer.draw(state, timeline.prev, view, {
     godView,
     selectedId,
     briefedRcs: 3,
     briefedPositions: timeline.briefedPositions(),
+    lz: state.groundOp?.lz ?? null,
   });
+
+  // Cinematic caption: the most recent narratable event.
+  const captionEl = document.getElementById('caption')!;
+  if (cinematic) {
+    let caption = '';
+    for (let i = state.events.length - 1; i >= 0; i--) {
+      const f = formatEvent(state.events[i]!, state);
+      if (f) {
+        caption = `T+${fmtClock(state.events[i]!.tick)} — ${f.text}`;
+        break;
+      }
+    }
+    captionEl.textContent = caption;
+  } else {
+    captionEl.textContent = '';
+  }
 
   // Header/state widgets.
   clockEl.textContent = `T+${fmtClock(state.tick)}`;
@@ -426,11 +655,15 @@ function frame(now: number): void {
     timeline.cursor < timeline.states.length - 1 ? ' (replay)' : ''
   }`;
 
-  // Unit panel — only rebuild when its content could have changed.
-  const panelKey = `${timeline.cursor}:${selectedId}:${godView}`;
+  // Side panels — only rebuild when their content could have changed.
+  const panelKey = `${timeline.cursor}:${selectedId}:${godView}:${timeline.orders.length}:${timeline.states.length}`;
   if (panelKey !== lastPanelKey) {
     lastPanelKey = panelKey;
     unitPanel.innerHTML = renderUnitPanel(state);
+    orderList.innerHTML = renderOrderList();
+    const groundHtml = renderGroundPanel(state);
+    groundPanel.innerHTML = groundHtml;
+    (groundPanel as HTMLElement).style.display = groundHtml ? 'block' : 'none';
   }
 
   // Event log — rebuild when events (or view filter) change.
