@@ -9,5 +9,6 @@ export { buildAdaptiveStrikeScenario } from './scenarios/strike-adaptive';
 export { buildRescueScenario } from './scenarios/rescue-op';
 export { BREACH_ROSTER, importRoster } from './scenarios/breach-roster';
 export * from './scenarios/plans';
+export * from './oob/assembly';
 export * from './campaign/campaign';
 export { generateDebrief } from './replay/debrief';

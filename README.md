@@ -86,7 +86,8 @@ CMO-style real-time/WEGO execution over the headless core — a 2D tactical map 
 - **Time compression**: pause / 1× / 4× / 15× / 60× / single-step, on one mission clock.
 - **WEGO timeline**: every tick's state is cached, so the scrubber jumps anywhere instantly. Issuing an order while scrubbed back **rewrites the future** — cached states past the cursor are dropped and the sim recomputes forward with the amended order log. Determinism makes the untouched prefix byte-identical, so only the future changes.
 - **Orders**: click to select, right-click for waypoints (shift appends), ROE authority buttons, jammer toggle, RTB, ground-op phase buttons, and per-weapon engage buttons that are pre-validated against the same `validateLaunch` the sim uses (a disabled button tells you *why* — `OUT_OF_ENVELOPE`, `ROE_HOLD`, …).
-- **Planner (step 5)**: the order log *is* the plan. Load a preset (every plan from the test suite), author orders with a time offset ("issue at now + N s"), delete scheduled orders — deleting one invalidates only the cached future from its tick — and **RUN ►►** scrubs the whole plan to the end instantly for review on the timeline. Full drag-and-drop OOB assembly is the remaining planning-layer gap.
+- **Planner (step 5)**: the order log *is* the plan. Load a preset (every plan from the test suite), author orders with a time offset ("issue at now + N s"), delete scheduled orders — deleting one invalidates only the cached future from its tick — and **RUN ►►** scrubs the whole plan to the end instantly for review on the timeline.
+- **Mission Builder (OOB/loadout assembly)**: drag airframes from the hangar into the strike package and stores from the armory onto each jet's hardpoints. Loadouts are tradeoffs, not upgrades — every store costs stations, adds RCS (priced by the same radar equation the IADS uses), and adds drag against the bingo-fuel clock; the builder shows the computed numbers live and refuses to commit an overloaded wing. The committed package is swapped into any scenario via the pure `withBluePackage`, and the standard package reproduces the hand-built scenarios **byte-for-byte** (locked in by test), so the assembly path and the scripted path are provably the same sim.
 - **Sensor-honest picture**: the default view shows your package, the briefed IADS sites, assessed detection rings (including your own jamming benefit), emitter up/down state (ESM is passive), and RWR `SPIKE` warnings. RED's actual track quality on you is only visible in **TRUTH VIEW**.
 
 ## Roadmap (from the design doc's build order)
@@ -95,6 +96,6 @@ CMO-style real-time/WEGO execution over the headless core — a 2D tactical map 
 2. ✅ Executive Version UI on one hand-made scenario: 1 strike package vs. a static IADS
 3. ✅ EW/jamming + SEAD sequencing + adaptive SAM behavior (EMCON, shoot-and-scoot, ARM-scare adaptation)
 4. ✅ Ground extraction tie-in (Breach Protocol roster import, hostage clock, breach gating, MANPADS-vs-helo exfil)
-5. ✅ Planning Version UI (order-log authoring, presets, timed orders, run-to-end scrubbing; OOB assembly still open)
+5. ✅ Planning Version UI (order-log authoring, presets, timed orders, run-to-end scrubbing, drag-and-drop OOB/loadout assembly)
 6. ✅ Nemesis IADS adaptation + persistent squadron roster (headless campaign module, fully tested)
 7. ✅ Cinematic replay & debrief (auto-camera replay + narrated INTSUM with intercept chatter; the 3D battle-documentary engine fork remains future work)

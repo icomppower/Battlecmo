@@ -11,8 +11,10 @@ import {
   rescuePlan,
 } from '../src/scenarios/plans';
 import { generateDebrief } from '../src/replay/debrief';
+import { withBluePackage, type AircraftConfig } from '../src/oob/assembly';
 import type { Order, RoeLevel, SimEvent, SimState, Vec3 } from '../src/core/types';
 import { Renderer, type View } from './render';
+import { initBuilder } from './builder';
 
 const SEED = 42;
 const MAX_RUN_TICKS = 1_800;
@@ -106,6 +108,16 @@ class Timeline {
 }
 
 // ---------------------------------------------------------------------------
+
+/** Committed Mission Builder package; null flies the scenario's stock OOB. */
+let packageConfigs: AircraftConfig[] | null = null;
+
+/** Scenario builder with the committed package (if any) swapped in. */
+function scenarioBuild(name: string): () => SimState {
+  const base = SCENARIOS[name]!;
+  const configs = packageConfigs;
+  return configs ? () => withBluePackage(base(), configs) : base;
+}
 
 const timeline = new Timeline(SCENARIOS['strike-basic']!);
 const canvas = document.getElementById('map') as HTMLCanvasElement;
@@ -247,7 +259,14 @@ document.getElementById('reset')!.addEventListener('click', () => {
 
 const scenarioSelect = document.getElementById('scenario') as HTMLSelectElement;
 scenarioSelect.addEventListener('change', () => {
-  timeline.reset(SCENARIOS[scenarioSelect.value]!);
+  timeline.reset(scenarioBuild(scenarioSelect.value));
+  selectedId = null;
+  speed = 0;
+});
+
+initBuilder((configs) => {
+  packageConfigs = configs;
+  timeline.reset(scenarioBuild(scenarioSelect.value));
   selectedId = null;
   speed = 0;
 });
@@ -277,7 +296,7 @@ presetSelect.addEventListener('change', () => {
   const preset = PRESETS[presetSelect.value];
   if (!preset) return;
   scenarioSelect.value = preset.scenario;
-  timeline.reset(SCENARIOS[preset.scenario]!);
+  timeline.reset(scenarioBuild(preset.scenario));
   timeline.orders = preset.plan();
   selectedId = null;
   speed = 0;
@@ -545,8 +564,13 @@ function missionOutcome(state: SimState): { cls: string; text: string } | null {
   if (!state.units['red-hq']!.alive) {
     return { cls: 'success', text: 'MISSION SUCCESS — OBJECTIVE DESTROYED' };
   }
-  const strikersDead = ['blue-striker-1', 'blue-striker-2'].every((id) => !state.units[id]!.alive);
-  if (strikersDead) return { cls: 'failure', text: 'MISSION FAILED — STRIKE ELEMENT LOST' };
+  // Strike element = every armed BLUE fixed-wing (package composition varies).
+  const strikers = Object.values(state.units).filter(
+    (u) => u.side === 'BLUE' && u.domain === 'AIR' && u.weapons.length > 0,
+  );
+  if (strikers.length > 0 && strikers.every((u) => !u.alive)) {
+    return { cls: 'failure', text: 'MISSION FAILED — STRIKE ELEMENT LOST' };
+  }
   return null;
 }
 
