@@ -322,6 +322,7 @@ document.getElementById('reset')!.addEventListener('click', () => {
   timeline.reset();
   selectedId = null;
   speed = 0;
+  onMissionReset();
 });
 
 const scenarioSelect = document.getElementById('scenario') as HTMLSelectElement;
@@ -329,6 +330,7 @@ scenarioSelect.addEventListener('change', () => {
   timeline.reset(scenarioBuild(scenarioSelect.value));
   selectedId = null;
   speed = 0;
+  onMissionReset();
 });
 
 initBuilder(
@@ -337,6 +339,7 @@ initBuilder(
     timeline.reset(scenarioBuild(scenarioSelect.value));
     selectedId = null;
     speed = 0;
+    onMissionReset();
   },
   (unitId) => {
     const rec = campaign.squadron.find((r) => r.unitId === unitId);
@@ -349,6 +352,53 @@ document.getElementById('replay')!.addEventListener('click', () => {
   cinematic = true;
   speed = 4;
 });
+
+// ---- 3D replay view (phase 1: read-only) ----------------------------------
+
+type Replay3DModule = typeof import('./replay3d');
+let replay3d: import('./replay3d').Replay3D | null = null;
+let mode3d = false;
+let camMode: import('./replay3d').CameraMode = 'overview';
+const map3dEl = document.getElementById('map3d') as HTMLElement;
+const camSel = document.getElementById('camsel') as HTMLSelectElement;
+const view3dBtn = document.getElementById('view3d')!;
+
+function populateCameraOptions(state: SimState): void {
+  const options = ['<option value="overview">cam: overview</option>'];
+  for (const u of Object.values(state.units)) {
+    if (u.side === 'BLUE' && u.domain === 'AIR') {
+      options.push(`<option value="chase:${u.id}">cam: chase ${esc(u.name)}</option>`);
+    }
+  }
+  const prior = camSel.value;
+  camSel.innerHTML = options.join('');
+  camSel.value = [...camSel.options].some((o) => o.value === prior) ? prior : 'overview';
+  camMode = camSel.value as import('./replay3d').CameraMode;
+}
+
+view3dBtn.addEventListener('click', () => {
+  mode3d = !mode3d;
+  map3dEl.style.display = mode3d ? 'block' : 'none';
+  camSel.style.display = mode3d ? '' : 'none';
+  if (mode3d) {
+    populateCameraOptions(timeline.states[0]!);
+    if (!replay3d) {
+      import('./replay3d').then((mod: Replay3DModule) => {
+        replay3d = new mod.Replay3D(map3dEl);
+      });
+    }
+  }
+});
+
+camSel.addEventListener('change', () => {
+  camMode = camSel.value as import('./replay3d').CameraMode;
+});
+
+/** Anything that swaps the mission must also rebuild the 3D scene. */
+function onMissionReset(): void {
+  replay3d?.resetScene();
+  if (mode3d) populateCameraOptions(timeline.states[0]!);
+}
 
 document.getElementById('debrief')!.addEventListener('click', () => {
   const text = generateDebrief(
@@ -375,6 +425,7 @@ presetSelect.addEventListener('change', () => {
   timeline.orders = preset.plan();
   selectedId = null;
   speed = 0;
+  onMissionReset();
 });
 
 document.getElementById('runend')!.addEventListener('click', () => {
@@ -814,14 +865,18 @@ function frame(now: number): void {
       if (speed === 0) cinematic = false;
     }
   }
-  renderer.draw(state, timeline.prev, view, {
-    godView,
-    selectedId,
-    briefedRcs: 3,
-    briefedPositions: timeline.briefedPositions(),
-    intel: timeline.states[0]!.intel ?? null,
-    lz: state.groundOp?.lz ?? null,
-  });
+  if (mode3d && replay3d) {
+    replay3d.render(state, timeline.prev, camMode);
+  } else {
+    renderer.draw(state, timeline.prev, view, {
+      godView,
+      selectedId,
+      briefedRcs: 3,
+      briefedPositions: timeline.briefedPositions(),
+      intel: timeline.states[0]!.intel ?? null,
+      lz: state.groundOp?.lz ?? null,
+    });
+  }
 
   // Cinematic caption: the most recent narratable event.
   const captionEl = document.getElementById('caption')!;
@@ -844,6 +899,7 @@ function frame(now: number): void {
   for (const btn of speedButtons) btn.classList.toggle('on', Number(btn.dataset.speed) === speed);
   for (const btn of roeButtons) btn.classList.toggle('on', btn.dataset.roe === state.roe.BLUE);
   godBtn.classList.toggle('on', godView);
+  view3dBtn.classList.toggle('on', mode3d);
 
   // Scrubber.
   scrubber.max = String(timeline.states.length - 1);

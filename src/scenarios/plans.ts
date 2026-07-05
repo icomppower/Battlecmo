@@ -219,17 +219,24 @@ export function escalationPlan(): Order[] {
     { atTick: 300, type: 'SET_ROE', side: 'BLUE', level: 'FREE' },
     { atTick: 395, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'aam-dart', targetId: 'red-cap-1' },
     { atTick: 420, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'aam-dart', targetId: 'red-cap-1' },
-    // TERRAIN: the deck run behind the Koro ridge.
+    // TERRAIN: the deck run behind the Koro ridge — parallel the crest on
+    // its masked (northwest) side, round the northern tip at (-30,-6), and
+    // pop out inside the cue ring but under the SAM's 100 m floor. The
+    // route never crosses the crest segment: at 60 m that would be rock.
     { atTick: 400, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [
       { x: -45_000, y: -18_000, alt: 60 },
+      { x: -36_000, y: -9_500, alt: 60 },
+      { x: -31_000, y: -3_000, alt: 60 },
       { x: -26_000, y: -5_000, alt: 60 },
     ] },
     // Reactive SEAD once the corridor exit cues the battery up.
     { atTick: 700, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'arm-lance', targetId: 'red-sam-1' },
     { atTick: 800, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'agm-stormbreak', targetId: 'red-hq' },
     { atTick: 801, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'agm-stormbreak', targetId: 'red-hq' },
-    // Egress: back out the way the terrain allows.
+    // Egress: back out the way the terrain allows — around the tip again.
     { atTick: 810, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [
+      { x: -31_000, y: -3_000, alt: 60 },
+      { x: -36_000, y: -9_500, alt: 60 },
       { x: -45_000, y: -18_000, alt: 60 },
       { x: -140_000, y: 3_000, alt: 8_000 },
     ] },

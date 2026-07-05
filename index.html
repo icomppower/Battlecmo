@@ -216,6 +216,10 @@
       <button id="builderopen">MISSION BUILDER</button>
       <button id="campaignopen">CAMPAIGN</button>
       <button id="godview">TRUTH VIEW</button>
+      <button id="view3d">3D</button>
+      <select id="camsel" style="display:none;">
+        <option value="overview">cam: overview</option>
+      </select>
       <button id="replay">▶ REPLAY</button>
       <button id="debrief">DEBRIEF</button>
       <button id="reset">RESET MISSION</button>
@@ -224,6 +228,7 @@
   <main>
     <div id="mapwrap">
       <canvas id="map"></canvas>
+      <div id="map3d" style="position:absolute; inset:0; display:none;"></div>
       <div id="banner"></div>
       <div id="help">
         click: select unit · right-click: waypoint (shift: append) ·<br/>

@@ -110,4 +110,10 @@ CMO-style real-time/WEGO execution over the headless core — a 2D tactical map 
 6. ✅ Nemesis IADS adaptation + persistent squadron roster (campaign module + in-game CAMPAIGN screen with between-mission debrief)
 7. ✅ Cinematic replay & debrief (auto-camera replay + narrated INTSUM with intercept chatter; the 3D battle-documentary engine fork remains future work)
 
-Post-v0.1 additions: air-to-air (AAM/CAP), naval domain (corvette + anti-ship missile), terrain masking (ridge LOS), confidence-graded intel dossier, campaign UI with squadron fatigue effects. Remaining future work: the real-terrain 3D visualization fork and full-fidelity ground combat (both deliberately parked in the design doc).
+Post-v0.1 additions: air-to-air (AAM/CAP), naval domain (corvette + anti-ship missile), terrain masking (ridge LOS), confidence-graded intel dossier, campaign UI with squadron fatigue effects. Remaining future work: full-fidelity ground combat (deliberately parked in the design doc).
+
+## 3D replay — phase 1 (web/replay3d.ts)
+
+A read-only Three.js view over the same recorded states the 2D map and scrubber use — no orders, no picking, no separate simulation, and the `three` bundle loads lazily only when the **3D** toggle is hit. Terrain ridges are extruded to their real footprint with ×6 vertical exaggeration (applied equally to unit altitudes, so "under the radar" reads on screen), engagement rings live on the ground plane and grey out when the emitter is down, and two camera families ship: an auto-orbiting overview that follows the action, and per-aircraft chase cams. The deck run is the money shot: chase Hammer 2 through the Koro corridor at 60 m with the lit rock face towering to starboard and the SAM ring waiting on the far side.
+
+Building this view caught a real plan bug the 2D map hid: the scripted corridor crossed the crest *line* mid-run — legal to the LOS model, but rock at 60 m. The route now parallels the crest on its masked side and rounds the northern tip, exactly matching the plan's fiction ("pops out inside the cue ring, below the engagement floor").
