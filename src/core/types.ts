@@ -129,6 +129,21 @@ export interface SamDoctrine {
   scootTo?: Vec3;
   /** March speed while relocating, m/s. */
   scootSpeed?: number;
+  /**
+   * Nemesis counter to decoy drones: don't LAUNCH at slow air contacts that
+   * have never fired a weapon, outside self-defense range. Deterministic and
+   * exploitable within limits — a striker can creep in slow and unengaged,
+   * but its own weapon release unmasks it (launch plumes are observable),
+   * and anything inside selfDefenseRange gets shot regardless. The cue logic
+   * is untouched: a discriminated decoy still lights the radar up, which is
+   * exactly the counter-counter (emissions bait for reactive SEAD).
+   */
+  discrimination?: {
+    /** Contacts moving slower than this read as probable decoys, m/s. */
+    maxDecoySpeed: number;
+    /** Inside this range everything is a threat to the battery itself, m. */
+    selfDefenseRange: number;
+  };
 }
 
 /**
@@ -398,6 +413,13 @@ export interface SimState {
    * the data lives in code, not in state, so WEGO clones stay cheap.
    */
   terrainId?: string;
+  /**
+   * Surveyed gap-filler radar sites: positions the IADS's own engineers have
+   * plotted as covering the terrain shadows in their coverage. Scenario
+   * data, not deployed units — the nemesis erects a radar here only after
+   * evidence that a strike came through unobserved.
+   */
+  gapFillerSites?: Vec3[];
   /** BLUE's confidence-graded intel dossier, keyed by RED unit id. */
   intel?: Record<string, IntelEntry>;
 }

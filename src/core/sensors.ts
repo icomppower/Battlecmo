@@ -55,7 +55,7 @@ export function effectiveRange(state: SimState, owner: Unit, sensor: SensorDef, 
 }
 
 /** Actual motion, not commanded speed: a unit with no waypoint is parked. */
-function targetGroundSpeed(u: Unit): number {
+export function targetGroundSpeed(u: Unit): number {
   return u.waypoints.length > 0 ? u.speed : 0;
 }
 

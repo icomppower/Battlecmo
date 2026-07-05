@@ -110,6 +110,11 @@ export function buildFjordScenario(): SimState {
     nextEntitySeq: 1,
     weaponCatalog: WEAPONS,
     terrainId: 'romsdal',
+    // The IADS engineers know their own dead ground: the surveyed gap-filler
+    // site sits low near the fjord bend with a clean sweep up the outer
+    // arm's water — exactly the corridor the BFS found. Nothing stands here
+    // until the nemesis has evidence a strike came through unobserved.
+    gapFillerSites: [{ x: -22_000, y: 12_000, alt: 0 }],
     intel: {
       'red-ew-1': {
         unitId: 'red-ew-1',

@@ -362,6 +362,128 @@ export function decoySweepPlan(): Order[] {
   ];
 }
 
+/**
+ * Counter-counter to the nemesis's fleet-wide CIWS alert: the escalation
+ * package re-armed for SATURATION. The CIWS mount services one inbound per
+ * tick and the approach is only ~4 attempts wide, so three Pikes arriving
+ * together guarantee a leaker — arithmetic, not luck. The stations come out
+ * of hide: Hammer 1 gives up the AGMs it never released anyway, Viper trades
+ * two hardpoints and keeps both ARMs.
+ */
+export function saturationPackage(): AircraftConfig[] {
+  const pkg = escalationPackage();
+  pkg.find((c) => c.id === 'blue-striker-1')!.stores = ['st-irst', 'st-aam-2', 'st-asm-1'];
+  pkg.find((c) => c.id === 'blue-sead-1')!.stores = ['st-arm-2', 'st-asm-1'];
+  return pkg;
+}
+
+/**
+ * The escalation counter-plan with a three-Pike salvo instead of one. The
+ * launches are staggered so the missiles arrive back-to-back (~t=311-317):
+ * the mount services one inbound per tick, so a compressed stream leaves it
+ * at most three attempts per missile — and the third Pike runs out its
+ * clock. Three shooters firing the moment they could would instead feed the
+ * mount one comfortable engagement at a time, which is what it wants.
+ */
+export function saturationPlan(): Order[] {
+  return [
+    ...escalationPlan(),
+    { atTick: 10, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'asm-pike', targetId: 'red-corvette-1' },
+    { atTick: 55, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'asm-pike', targetId: 'red-corvette-1' },
+  ];
+}
+
+/**
+ * Counter-counter to decoy discrimination: the drones' job changes from
+ * missile sponge to EMISSIONS BAIT. A discriminated decoy still cues the
+ * battery's radar up (only the launch decision changed) — and a radar that
+ * is UP eats a reactive ARM at full Pk with a guaranteed scare window.
+ * Sequencing: decoys cue the radar ~t=520, Viper's ARM launches at t=525
+ * into a live emitter, the scare lands ~t=607 (240-tick blink), and the
+ * strikers dash only AFTER the scare so the battery never gets a shot at
+ * anything real.
+ */
+export function emissionsBaitPlan(): Order[] {
+  return [
+    { atTick: 0, type: 'SET_ROE', side: 'BLUE', level: 'TIGHT' },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-decoy-1', waypoints: [{ x: -20_000, y: -1_000, alt: 3_000 }] },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-decoy-2', waypoints: [{ x: -20_000, y: 1_000, alt: 3_000 }] },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-sead-1', waypoints: [{ x: -64_000, y: 2_000, alt: 9_000 }] },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: -50_000, y: -3_000, alt: 8_000 }] },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [{ x: -50_000, y: 3_000, alt: 8_000 }] },
+    // The ghosts have the radar up; put the Lance into a LIVE emitter.
+    { atTick: 525, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'arm-lance', targetId: 'red-sam-1' },
+    // Dash only after the scare lands (~t=607) — the window is 240 ticks.
+    { atTick: 575, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: -27_000, y: -3_000, alt: 8_000 }] },
+    { atTick: 575, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [{ x: -27_000, y: 3_000, alt: 8_000 }] },
+    { atTick: 670, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'agm-stormbreak', targetId: 'red-hq' },
+    { atTick: 671, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'agm-stormbreak', targetId: 'red-hq' },
+    { atTick: 675, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: -140_000, y: -3_000, alt: 8_000 }] },
+    { atTick: 675, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [{ x: -140_000, y: 3_000, alt: 8_000 }] },
+  ];
+}
+
+/**
+ * Counter-counter to the fjord gap-filler: it is an EMITTER, and it told
+ * BLUE where it lives by radiating (the m3 dossier carries the CONTESTED
+ * ELINT fix, cleared for SEAD under TIGHT). One pre-planned Lance from a
+ * standoff Viper scares it dark (~t=77, 240-tick window) and the corridor
+ * reopens; the strikers simply wait out the ARM's flight before entering.
+ */
+export function fjordSeadPackage(): AircraftConfig[] {
+  return [
+    {
+      id: 'blue-striker-1',
+      callsign: 'Hammer 1',
+      airframeId: 'af-ranger',
+      stores: ['st-agm-2'],
+      spawn: { x: -52_000, y: 10_000, alt: 120 },
+      speed: 250,
+    },
+    {
+      id: 'blue-striker-2',
+      callsign: 'Hammer 2',
+      airframeId: 'af-ranger',
+      stores: ['st-agm-2'],
+      spawn: { x: -52_000, y: 12_000, alt: 120 },
+      speed: 250,
+    },
+    {
+      id: 'blue-sead-1',
+      callsign: 'Viper (SEAD)',
+      airframeId: 'af-viper',
+      stores: ['st-arm-2'],
+      spawn: { x: -80_000, y: 10_000, alt: 9_000 },
+      speed: 0,
+    },
+  ];
+}
+
+export function fjordSeadPlan(): Order[] {
+  const corridor = [
+    { x: -50_500, y: 11_000, alt: 120 },
+    { x: -45_500, y: 12_000, alt: 120 },
+    { x: -40_000, y: 12_000, alt: 120 },
+    { x: -34_000, y: 12_000, alt: 120 },
+    { x: -28_500, y: 12_000, alt: 120 },
+    { x: -22_500, y: 12_000, alt: 120 },
+    { x: -22_500, y: 11_000, alt: 120 },
+  ];
+  const egress = [...corridor].reverse().concat([{ x: -140_000, y: 10_000, alt: 120 }]);
+  return [
+    { atTick: 0, type: 'SET_ROE', side: 'BLUE', level: 'TIGHT' },
+    // The Lance flies first; the scare lands ~t=77 and buys 240 ticks.
+    { atTick: 0, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'arm-lance', targetId: 'red-gapfill-1' },
+    // Enter the corridor only after the gap-filler is dark.
+    { atTick: 90, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: corridor },
+    { atTick: 100, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: corridor },
+    { atTick: 230, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'agm-stormbreak', targetId: 'red-hq' },
+    { atTick: 231, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'agm-stormbreak', targetId: 'red-hq' },
+    { atTick: 235, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: egress },
+    { atTick: 245, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: egress },
+  ];
+}
+
 /** Jamming shortens the early-warning picture but nobody shuts the SAM up. */
 export function jamOnlyPlan(): Order[] {
   return [

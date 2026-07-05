@@ -8,6 +8,7 @@ import {
   canDetect,
   identifyContact,
   isSuppressed,
+  targetGroundSpeed,
 } from './sensors';
 import { validateLaunch } from './weapons';
 import { aglOf } from './terrain';
@@ -643,6 +644,21 @@ function runDefensiveEngagements(s: SimState): void {
       // validateLaunch enforces the same interlock — an UNKNOWN bogey under
       // FREE passes both, which is what makes blue-on-blue possible.
       if (identifyContact(s, unit.side, contact) === 'FRIEND') continue;
+      // Decoy discrimination (nemesis-issued): a slow air contact that has
+      // never fired, outside self-defense range, is assessed as a drone and
+      // not worth a round. The radar still tracks it — only the launch
+      // decision changes — so a "discriminated" decoy still cues the IADS
+      // up, and a weapon release unmasks a creeping striker instantly.
+      const disc = unit.samDoctrine?.discrimination;
+      if (
+        disc &&
+        target.domain === 'AIR' &&
+        targetGroundSpeed(target) < disc.maxDecoySpeed &&
+        (target.shotsFired ?? 0) === 0 &&
+        dist2d(unit.pos, target.pos) > disc.selfDefenseRange
+      ) {
+        continue;
+      }
       // One missile per target per shooter at a time.
       const alreadyEngaged = Object.values(s.missiles).some(
         (m) => m.alive && m.shooterId === unit.id && m.targetId === target.id,

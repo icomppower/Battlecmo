@@ -1,4 +1,5 @@
-import type { Operator, SimState } from '../core/types';
+import type { CiwsDef, Operator, SimState, Unit } from '../core/types';
+import { getTerrain, terrainHeightAt } from '../core/terrain';
 
 /**
  * Campaign layer (build order step 6): the nemesis IADS commander and the
@@ -22,6 +23,12 @@ export interface NemesisProfile {
   shutdownDecay: number;
   /** Fighters prioritize and reach for radiating surveillance aircraft. */
   huntEmitters: boolean;
+  /** A gap-filler radar deploys to the theater's surveyed shadow sites. */
+  gapFiller: boolean;
+  /** Ships mount CIWS after losing a hull to a standoff anti-ship missile. */
+  pointDefenseAlert: boolean;
+  /** Batteries stop expending rounds on slow, never-firing air contacts. */
+  decoyDiscrimination: boolean;
   /** Human-readable staff notes — this is the INTSUM the player reads. */
   notes: string[];
 }
@@ -44,7 +51,16 @@ export interface CampaignState {
 export function newCampaign(roster: Operator[]): CampaignState {
   return {
     missionNumber: 1,
-    nemesis: { cueMinAlt: 0, jamResistance: 0, shutdownDecay: 0.5, huntEmitters: false, notes: [] },
+    nemesis: {
+      cueMinAlt: 0,
+      jamResistance: 0,
+      shutdownDecay: 0.5,
+      huntEmitters: false,
+      gapFiller: false,
+      pointDefenseAlert: false,
+      decoyDiscrimination: false,
+      notes: [],
+    },
     squadron: [
       { unitId: 'blue-striker-1', pilot: 'CAPT Vega', missions: 0, fatigue: 0, status: 'READY' },
       { unitId: 'blue-striker-2', pilot: 'LT Brandt', missions: 0, fatigue: 0, status: 'READY' },
@@ -56,6 +72,12 @@ export function newCampaign(roster: Operator[]): CampaignState {
   };
 }
 
+/** The CIWS fit issued under a point-defense alert (see tick's runPointDefense). */
+export const CIWS_ALERT_FIT: CiwsDef = { range: 1_200, pk: 0.3, magazine: 10 };
+
+/** Launch-discrimination doctrine issued after wreckage analysis finds drones. */
+export const DECOY_DISCRIMINATION = { maxDecoySpeed: 230, selfDefenseRange: 15_000 };
+
 /** Stamp the nemesis's current doctrine onto a freshly built scenario. */
 export function applyNemesisDoctrine(state: SimState, nemesis: NemesisProfile): SimState {
   for (const unit of Object.values(state.units)) {
@@ -65,6 +87,9 @@ export function applyNemesisDoctrine(state: SimState, nemesis: NemesisProfile): 
     }
     if (unit.samDoctrine) {
       unit.samDoctrine.cueMinAlt = nemesis.cueMinAlt;
+      if (nemesis.decoyDiscrimination) {
+        unit.samDoctrine.discrimination = { ...DECOY_DISCRIMINATION };
+      }
     }
     if (unit.emitterDoctrine) {
       unit.emitterDoctrine.shutdownDecay = nemesis.shutdownDecay;
@@ -72,6 +97,49 @@ export function applyNemesisDoctrine(state: SimState, nemesis: NemesisProfile): 
     if (unit.capDoctrine) {
       unit.capDoctrine.huntEmitters = nemesis.huntEmitters;
     }
+    if (nemesis.pointDefenseAlert && unit.domain === 'SEA' && !unit.ciws) {
+      unit.ciws = { ...CIWS_ALERT_FIT };
+    }
+  }
+
+  // Gap-filler radar: erected at the theater's surveyed shadow sites. It
+  // radiates continuously from day one, so BLUE's between-mission ELINT
+  // sweep hears it — the dossier carries a CONTESTED fix and the site is
+  // cleared for SEAD under TIGHT. The corridor is closed, not hidden:
+  // legible, predictable, and counterable.
+  if (nemesis.gapFiller && state.gapFillerSites) {
+    const hf = getTerrain(state.terrainId);
+    state.gapFillerSites.forEach((site, i) => {
+      const id = `red-gapfill-${i + 1}`;
+      if (state.units[id]) return;
+      const groundAlt = hf ? terrainHeightAt(hf, site.x, site.y) : site.alt;
+      const unit: Unit = {
+        id,
+        side: 'RED',
+        domain: 'GROUND',
+        name: `Gap-filler radar ${i + 1}`,
+        pos: { x: site.x, y: site.y, alt: groundAlt + 10 },
+        speed: 0,
+        maxSpeed: 0,
+        rcs: 10,
+        sensors: [{ id: `${id}-radar`, kind: 'RADAR', baseRange: 45_000, refRcs: 5, emitting: true }],
+        weapons: [],
+        emitterDoctrine: { armReactionRange: 12_000, shutdownTicks: 240 },
+        waypoints: [],
+        alive: true,
+      };
+      state.units[id] = unit;
+      state.prebriefedTargets.BLUE = [...state.prebriefedTargets.BLUE, id];
+      if (state.intel) {
+        state.intel[id] = {
+          unitId: id,
+          confidence: 'CONTESTED',
+          briefedPos: { ...unit.pos },
+          uncertaintyRadius: 6_000,
+          note: 'New low-level emitter — ELINT caught its acceptance testing between missions. The quiet way in is not quiet anymore.',
+        };
+      }
+    });
   }
   return state;
 }
@@ -132,6 +200,55 @@ export function adaptNemesis(nemesis: NemesisProfile, final: SimState): NemesisP
       'ELINT correlated a persistent airborne surveillance radar behind the strike — ' +
         'interceptors re-tasked: radiating command-and-surveillance aircraft are now priority targets, ' +
         'engaged well beyond the normal commit ring.',
+    );
+  }
+
+  // The unobserved strike: RED lost units this mission yet never held a
+  // single track on a BLUE aircraft. The staff's only explanation is a
+  // terrain shadow — survey teams plot the dead ground, and a gap-filler
+  // radar deploys to the theater's surveyed shadow sites (if it has any).
+  const redEverTrackedAir = events.some(
+    (e) => e.type === 'DETECTION' && e.side === 'RED' && final.units[e.targetId]?.domain === 'AIR',
+  );
+  const redLostSomething = Object.values(final.units).some((u) => u.side === 'RED' && !u.alive);
+  if (!redEverTrackedAir && redLostSomething && !next.gapFiller) {
+    next.gapFiller = true;
+    next.notes.push(
+      'Strike arrived and departed without a single radar track — assessed as a terrain-masked approach. ' +
+        'Engineer survey of the coverage dead ground complete; gap-filler radar deployed to the shadowed corridor.',
+    );
+  }
+
+  // A hull lost to an anti-ship missile: every ship in the theater mounts
+  // (and mans) its point defense from now on. Saturation still works —
+  // the mount can only service one inbound at a time — but the single-
+  // missile standoff kill is over.
+  const asmKilledShip = events.some((e) => {
+    if (e.type !== 'UNIT_DESTROYED') return false;
+    const missile = final.missiles[e.byMissileId];
+    const weapon = missile && final.weaponCatalog[missile.weaponId];
+    return weapon?.kind === 'ASM' && final.units[e.unitId]?.domain === 'SEA';
+  });
+  if (asmKilledShip && !next.pointDefenseAlert) {
+    next.pointDefenseAlert = true;
+    next.notes.push(
+      'Hull lost to a sea-skimming missile fired from outside the air-defense ring — ' +
+        'close-in weapon systems fitted and manned fleet-wide.',
+    );
+  }
+
+  // Wreckage analysis: missiles were expended on unmanned decoys. Crews are
+  // ordered to hold fire on slow contacts that have never fired a weapon,
+  // outside self-defense range. The radars still track and cue on them —
+  // only the launch decision changes.
+  const shotAtDecoys = events.some(
+    (e) => e.type === 'LAUNCH' && e.side === 'RED' && final.units[e.targetId]?.decoy,
+  );
+  if (shotAtDecoys && !next.decoyDiscrimination) {
+    next.decoyDiscrimination = true;
+    next.notes.push(
+      'Wreckage analysis: expended rounds brought down unmanned decoy drones. ' +
+        'Crews ordered to discriminate — no launches on slow, non-firing contacts beyond self-defense range.',
     );
   }
 

@@ -120,7 +120,16 @@ describe('the sensor war (nemesis axis: emitter hunting)', () => {
   });
 
   it('mission 2: a hunting CAP kills a forward orbit — and BLUE loses the air picture with it', () => {
-    const nemesis = { cueMinAlt: 0, jamResistance: 0, shutdownDecay: 0.5, huntEmitters: true, notes: [] };
+    const nemesis = {
+      cueMinAlt: 0,
+      jamResistance: 0,
+      shutdownDecay: 0.5,
+      huntEmitters: true,
+      gapFiller: false,
+      pointDefenseAlert: false,
+      decoyDiscrimination: false,
+      notes: [],
+    };
     const s0 = withBluePackage(buildEscalationScenario(), [
       ...sensorWarPackage().filter((c) => c.id !== 'blue-awacs-1'),
       watchtower({ x: -85_000, y: 0, alt: 9_500 }), // inside the extended hunt ring
@@ -136,7 +145,16 @@ describe('the sensor war (nemesis axis: emitter hunting)', () => {
   });
 
   it('the counter-counter: a standoff orbit survives the hunt and keeps the whole picture', () => {
-    const nemesis = { cueMinAlt: 0, jamResistance: 0, shutdownDecay: 0.5, huntEmitters: true, notes: [] };
+    const nemesis = {
+      cueMinAlt: 0,
+      jamResistance: 0,
+      shutdownDecay: 0.5,
+      huntEmitters: true,
+      gapFiller: false,
+      pointDefenseAlert: false,
+      decoyDiscrimination: false,
+      notes: [],
+    };
     const s0 = withBluePackage(buildEscalationScenario(), [
       ...sensorWarPackage().filter((c) => c.id !== 'blue-awacs-1'),
       watchtower({ x: -120_000, y: -14_000, alt: 9_500 }), // outside the extended ring
