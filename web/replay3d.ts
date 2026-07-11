@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { SimState, Unit, Vec3 } from '../src/core/types';
+import type { SimEvent, SimState, Unit, Vec3 } from '../src/core/types';
 import { isSuppressed } from '../src/core/sensors';
 import { getTerrain, type Heightfield } from '../src/core/terrain';
 
@@ -34,13 +34,84 @@ const COL = {
   ringDown: 0x5a6474,
   missileBlue: 0x9fd0ff,
   missileRed: 0xffb0aa,
+  ping: 0xffcf5c,
 };
 
 function toScene(p: Vec3): THREE.Vector3 {
   return new THREE.Vector3(p.x * S, Math.max(p.alt, 0) * S * ALT, -p.y * S);
 }
 
-export type CameraMode = 'overview' | `chase:${string}`;
+export type CameraMode =
+  | 'overview'
+  /** Cinematic auto-director: pick the shot from the event stream every frame. */
+  | 'director'
+  | `chase:${string}`
+  /** Orbit a fixed world point (event location), keyed by the unit at that point. */
+  | `orbit:${string}`
+  /** Frame the ground team + extraction helicopter (rescue-op mission). */
+  | 'ground';
+
+/** Sim-seconds (ticks) each director shot holds before it's eligible to lapse. */
+const DIRECTOR_HOLD: Partial<Record<SimEvent['type'], number>> = {
+  LAUNCH: 15,
+  HIT: 6,
+  EMITTER_SHUTDOWN: 6,
+  GROUND_PHASE: 8,
+};
+/** Longest of the above — bounds how far back the director needs to scan. */
+const DIRECTOR_MAX_HOLD = Math.max(...Object.values(DIRECTOR_HOLD));
+
+/**
+ * Cinematic auto-director: which shot is live *right now*, derived purely
+ * from the recorded event stream — the same events the 2D captions narrate.
+ * Stateless by design (a pure function of tick + history) so scrubbing the
+ * replay re-derives the identical shot instead of drifting from held state:
+ *   LAUNCH            → chase the shooter for ~15 sim-seconds
+ *   HIT / EMITTER_SHUTDOWN → orbit the event location
+ *   GROUND_PHASE       → frame the ground team + helicopter
+ *   nothing live       → overview orbit
+ * A newer qualifying event always wins over an older one still in its hold
+ * window (scanned newest-first), so escalating action cuts promptly.
+ */
+export function directorPick(state: SimState, events: SimEvent[]): CameraMode {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i]!;
+    if (e.tick < state.tick - DIRECTOR_MAX_HOLD) break; // too old for any hold window
+    const hold = DIRECTOR_HOLD[e.type];
+    if (hold === undefined || e.tick + hold <= state.tick) continue; // not directable, or lapsed
+    switch (e.type) {
+      case 'LAUNCH':
+        return `chase:${e.shooterId}`;
+      case 'HIT':
+        return `orbit:${e.targetId}`;
+      case 'EMITTER_SHUTDOWN':
+        return `orbit:${e.unitId}`;
+      case 'GROUND_PHASE':
+        return 'ground';
+      default:
+        continue;
+    }
+  }
+  return 'overview';
+}
+
+/** Expanding-ring event ping: real-time (not sim-time) so it reads at any replay speed. */
+const PING_LIFE_MS = 800;
+const PING_MIN_RADIUS = 0.3;
+const PING_MAX_RADIUS = 9;
+
+/** Unit circle, shared by every ping instance — radius comes from `.scale`, never rebuilt. */
+const pingRingPts: THREE.Vector3[] = [];
+for (let i = 0; i <= 48; i++) {
+  const a = (i / 48) * Math.PI * 2;
+  pingRingPts.push(new THREE.Vector3(Math.cos(a), 0, Math.sin(a)));
+}
+const pingRingGeometry = new THREE.BufferGeometry().setFromPoints(pingRingPts);
+
+interface Ping {
+  obj: THREE.LineLoop;
+  bornAt: number;
+}
 
 export class Replay3D {
   private renderer: THREE.WebGLRenderer;
@@ -49,6 +120,13 @@ export class Replay3D {
   private unitMeshes = new Map<string, THREE.Object3D>();
   private missileMeshes = new Map<string, THREE.Object3D>();
   private rings = new Map<string, THREE.LineLoop>();
+  /** Unit-name sprites, cached per unit id so label draw calls stay bounded. */
+  private labelSprites = new Map<string, THREE.Sprite>();
+  private pings: Ping[] = [];
+  /** Index into state.events already scanned for pings — avoids re-spawning history. */
+  private pingEventCursor = 0;
+  /** Last director-resolved shot; exposed read-only via `currentShot`. */
+  private lastResolvedMode: CameraMode = 'overview';
   private staticBuilt = false;
   private orbitAngle = 0;
   private camPos = new THREE.Vector3(0, 400, 400);
@@ -271,6 +349,49 @@ export class Replay3D {
     return obj;
   }
 
+  /**
+   * Screen-constant-size name tag, built once per unit and cached. Colored
+   * by side to match the unit mesh; `depthTest: true` + `fog: true` (the
+   * SpriteMaterial defaults) mean it is occluded by terrain and fades with
+   * distance exactly like the mesh it labels — a unit hidden behind a masked
+   * ridge never has a name floating above the rock.
+   */
+  private makeLabelSprite(u: Unit): THREE.Sprite {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d')!;
+    const color = u.side === 'BLUE' ? '#4da3ff' : '#ff5f56';
+    ctx.fillStyle = 'rgba(6, 9, 14, 0.75)';
+    ctx.fillRect(0, 12, 256, 40);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1, 13, 254, 38);
+    ctx.fillStyle = '#eef3fa';
+    ctx.font = '600 24px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(u.name, 128, 33, 240);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      sizeAttenuation: false,
+      transparent: true,
+      depthTest: true,
+      depthWrite: false,
+    });
+    const sprite = new THREE.Sprite(material);
+    // Tuned for this camera (fov 55): reads as a compact tag at cinematic
+    // ranges without dominating the frame at chase-cam close-ups.
+    sprite.scale.set(0.13, 0.0325, 1);
+    return sprite;
+  }
+
+  /** Vertical clearance above a unit mesh so the tag sits clear of the model. */
+  private static readonly LABEL_LIFT = 2.4;
+
   private headingOf(u: Unit, prev: SimState | null): number {
     const before = prev?.units[u.id];
     if (before && (before.pos.x !== u.pos.x || before.pos.y !== u.pos.y)) {
@@ -303,6 +424,17 @@ export class Replay3D {
           if (m?.color) m.color.setHex(COL.gray);
         });
       }
+
+      let label = this.labelSprites.get(u.id);
+      if (!label) {
+        label = this.makeLabelSprite(u);
+        this.labelSprites.set(u.id, label);
+        this.scene.add(label);
+      }
+      label.position.set(p.x, p.y + Replay3D.LABEL_LIFT, p.z);
+      // Never label what isn't drawn: wreckage keeps its (recolored) mesh but
+      // drops the tag so the scene declutters as a strike develops.
+      label.visible = u.alive;
     }
 
     // ---- engagement rings follow their batteries ----
@@ -357,8 +489,107 @@ export class Replay3D {
       }
     }
 
-    this.updateCamera(state, prev, mode);
+    this.scanForPings(state);
+    this.updatePings();
+
+    const resolvedMode = mode === 'director' ? directorPick(state, state.events) : mode;
+    this.lastResolvedMode = resolvedMode;
+    this.updateCamera(state, prev, resolvedMode);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /** The concrete shot actually in effect this frame (director-resolved, if applicable). */
+  get currentShot(): CameraMode {
+    return this.lastResolvedMode;
+  }
+
+  /** Spawn a ping for any LAUNCH/HIT/EMITTER_SHUTDOWN event new since the last render. */
+  private scanForPings(state: SimState): void {
+    const events = state.events;
+    // Scrubbing back shrinks the history — don't replay it as a ping burst.
+    if (events.length < this.pingEventCursor) this.pingEventCursor = events.length;
+    for (let i = this.pingEventCursor; i < events.length; i++) {
+      const e = events[i]!;
+      switch (e.type) {
+        case 'LAUNCH': {
+          const u = state.units[e.shooterId];
+          if (u) this.spawnPing(toScene(u.pos));
+          break;
+        }
+        case 'HIT': {
+          const u = state.units[e.targetId];
+          if (u) this.spawnPing(toScene(u.pos));
+          break;
+        }
+        case 'EMITTER_SHUTDOWN': {
+          const u = state.units[e.unitId];
+          if (u) this.spawnPing(toScene(u.pos));
+          break;
+        }
+      }
+    }
+    this.pingEventCursor = events.length;
+  }
+
+  private spawnPing(worldPos: THREE.Vector3): void {
+    const material = new THREE.LineBasicMaterial({ color: COL.ping, transparent: true, opacity: 0.9 });
+    const ring = new THREE.LineLoop(pingRingGeometry, material);
+    ring.position.copy(worldPos);
+    ring.scale.setScalar(PING_MIN_RADIUS);
+    this.scene.add(ring);
+    this.pings.push({ obj: ring, bornAt: performance.now() });
+  }
+
+  /** Age, expand, and fade active pings; drop them 0.8 s after they spawn. */
+  private updatePings(): void {
+    const now = performance.now();
+    for (let i = this.pings.length - 1; i >= 0; i--) {
+      const ping = this.pings[i]!;
+      const t = (now - ping.bornAt) / PING_LIFE_MS;
+      if (t >= 1) {
+        this.scene.remove(ping.obj);
+        (ping.obj.material as THREE.Material).dispose();
+        this.pings.splice(i, 1);
+        continue;
+      }
+      const radius = PING_MIN_RADIUS + t * (PING_MAX_RADIUS - PING_MIN_RADIUS);
+      ping.obj.scale.setScalar(radius);
+      (ping.obj.material as THREE.LineBasicMaterial).opacity = 0.9 * (1 - t);
+    }
+  }
+
+  /** Slow orbit around the live action (missiles first, else units) — the idle/fallback shot. */
+  private overviewShot(state: SimState): [THREE.Vector3, THREE.Vector3] {
+    const pts: THREE.Vector3[] = [];
+    for (const m of Object.values(state.missiles)) if (m.alive) pts.push(toScene(m.pos));
+    if (pts.length === 0) {
+      for (const u of Object.values(state.units)) if (u.alive) pts.push(toScene(u.pos));
+    }
+    const center = pts.length
+      ? pts.reduce((a, b) => a.add(b), new THREE.Vector3()).divideScalar(pts.length)
+      : new THREE.Vector3();
+    let radius = 250;
+    for (const p of pts) radius = Math.max(radius, center.distanceTo(p) * 1.2);
+    radius = Math.min(radius, 1_400);
+    this.orbitAngle += 0.0012;
+    const wantPos = new THREE.Vector3(
+      center.x + Math.cos(this.orbitAngle) * radius,
+      radius * 0.55,
+      center.z + Math.sin(this.orbitAngle) * radius,
+    );
+    return [wantPos, center];
+  }
+
+  /** Tighter orbit around a single fixed point — the event-location shot. */
+  private orbitPointShot(center: THREE.Vector3): [THREE.Vector3, THREE.Vector3] {
+    const radius = 380;
+    this.orbitAngle += 0.0025;
+    const wantPos = new THREE.Vector3(
+      center.x + Math.cos(this.orbitAngle) * radius,
+      radius * 0.5,
+      center.z + Math.sin(this.orbitAngle) * radius,
+    );
+    return [wantPos, center];
   }
 
   private updateCamera(state: SimState, prev: SimState | null, mode: CameraMode): void {
@@ -367,6 +598,8 @@ export class Replay3D {
 
     const chaseId = mode.startsWith('chase:') ? mode.slice(6) : null;
     const chased = chaseId ? state.units[chaseId] : null;
+    const orbitId = mode.startsWith('orbit:') ? mode.slice(6) : null;
+    const orbitUnit = orbitId ? state.units[orbitId] : null;
 
     if (chased?.alive) {
       // The money shot: sit behind and slightly above, look through the
@@ -385,26 +618,30 @@ export class Replay3D {
         .addScaledVector(right, -1_400 * S)
         .add(new THREE.Vector3(0, 2.4, 0));
       wantTarget = p.clone().addScaledVector(fwd, 3_500 * S).add(new THREE.Vector3(0, 0.8, 0));
-    } else {
-      // Overview: slow orbit around the action (missiles first, else units).
-      const pts: THREE.Vector3[] = [];
-      for (const m of Object.values(state.missiles)) if (m.alive) pts.push(toScene(m.pos));
-      if (pts.length === 0) {
-        for (const u of Object.values(state.units)) if (u.alive) pts.push(toScene(u.pos));
+    } else if (mode === 'ground' && state.groundOp) {
+      // Frame the ground team and their extraction helicopter together.
+      const team = state.units[state.groundOp.teamUnitId];
+      const helo = state.units[state.groundOp.heloUnitId];
+      const pts = [team, helo].filter((u): u is Unit => !!u).map((u) => toScene(u.pos));
+      if (pts.length) {
+        const center = pts.reduce((a, b) => a.add(b), new THREE.Vector3()).divideScalar(pts.length);
+        let radius = 220;
+        for (const p of pts) radius = Math.max(radius, center.distanceTo(p) * 1.6);
+        radius = Math.min(radius, 900);
+        this.orbitAngle += 0.0025;
+        wantPos = new THREE.Vector3(
+          center.x + Math.cos(this.orbitAngle) * radius,
+          radius * 0.5,
+          center.z + Math.sin(this.orbitAngle) * radius,
+        );
+        wantTarget = center;
+      } else {
+        [wantPos, wantTarget] = this.overviewShot(state);
       }
-      const center = pts.length
-        ? pts.reduce((a, b) => a.add(b), new THREE.Vector3()).divideScalar(pts.length)
-        : new THREE.Vector3();
-      let radius = 250;
-      for (const p of pts) radius = Math.max(radius, center.distanceTo(p) * 1.2);
-      radius = Math.min(radius, 1_400);
-      this.orbitAngle += 0.0012;
-      wantPos = new THREE.Vector3(
-        center.x + Math.cos(this.orbitAngle) * radius,
-        radius * 0.55,
-        center.z + Math.sin(this.orbitAngle) * radius,
-      );
-      wantTarget = center;
+    } else if (orbitUnit) {
+      [wantPos, wantTarget] = this.orbitPointShot(toScene(orbitUnit.pos));
+    } else {
+      [wantPos, wantTarget] = this.overviewShot(state);
     }
 
     this.camPos.lerp(wantPos, 0.08);
@@ -421,6 +658,18 @@ export class Replay3D {
     this.missileMeshes.clear();
     for (const ring of this.rings.values()) this.scene.remove(ring);
     this.rings.clear();
+    for (const label of this.labelSprites.values()) {
+      this.scene.remove(label);
+      label.material.map?.dispose();
+      label.material.dispose();
+    }
+    this.labelSprites.clear();
+    for (const ping of this.pings) {
+      this.scene.remove(ping.obj);
+      (ping.obj.material as THREE.Material).dispose();
+    }
+    this.pings.length = 0;
+    this.pingEventCursor = 0;
     // Ridges are cheap; rebuild them with the next render call.
     this.staticBuilt = false;
     const toRemove = this.scene.children.filter((c) => c.userData.staticScenery);
