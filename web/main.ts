@@ -7,6 +7,7 @@ import { buildEscalationScenario } from '../src/scenarios/strike-escalation';
 import { buildFjordScenario } from '../src/scenarios/strike-fjord';
 import { buildConvoyScenario } from '../src/scenarios/strike-convoy';
 import { buildPicketScenario } from '../src/scenarios/strike-picket';
+import { buildTaiwanStrikeScenario } from '../src/scenarios/strike-taiwan';
 import {
   baitAndBlinkPlan,
   convoyPlan,
@@ -24,6 +25,9 @@ import {
   jamOnlyPlan,
   naivePlan,
   rescuePlan,
+  taiwanStrikePlanA,
+  taiwanStrikePlanB,
+  taiwanStrikePlanC,
 } from '../src/scenarios/plans';
 import { generateDebrief } from '../src/replay/debrief';
 import { withBluePackage, type AircraftConfig } from '../src/oob/assembly';
@@ -61,6 +65,7 @@ const SCENARIOS: Record<string, () => SimState> = {
   'strike-fjord': buildFjordScenario,
   'strike-convoy': buildConvoyScenario,
   'strike-picket': buildPicketScenario,
+  'strike-taiwan': buildTaiwanStrikeScenario,
 };
 
 const PRESETS: Record<string, { plan: () => Order[]; scenario: string; pkg?: () => AircraftConfig[] }> = {
@@ -77,6 +82,12 @@ const PRESETS: Record<string, { plan: () => Order[]; scenario: string; pkg?: () 
   convoy: { plan: convoyPlan, scenario: 'strike-convoy' },
   pickethazard: { plan: picketHazardPlan, scenario: 'strike-picket' },
   picketsafe: { plan: picketSafePlan, scenario: 'strike-picket' },
+  // Taiwan Strait — fictional/hypothetical demo scenario (see strike-taiwan.ts
+  // module doc). No losing plan: all three pre-built plans fully clear the
+  // target set, by design (demo/showcase, not an adversarial proof).
+  taiwanplana: { plan: taiwanStrikePlanA, scenario: 'strike-taiwan' },
+  taiwanplanb: { plan: taiwanStrikePlanB, scenario: 'strike-taiwan' },
+  taiwanplanc: { plan: taiwanStrikePlanC, scenario: 'strike-taiwan' },
   // The brief says a staff solution is on file — this loads it. It is the
   // generator's own constructive winnability proof, timed to this mission's
   // sampled geometry and the nemesis's current doctrine.

@@ -593,6 +593,101 @@ export function picketSafePlan(): Order[] {
   ];
 }
 
+/**
+ * Taiwan Strait demo (strike-taiwan scenario) — DEMO/SHOWCASE, not an
+ * adversarial proof. All three RED hulls (two corvettes + the frigate they
+ * screen) sit in ACTIVE emcon with no adaptive doctrine, so there is no
+ * losing plan to counter here — these three all fully clear the target set.
+ *
+ * Plan A — full SEAD, close-in strike: Viper stages at (-50 000, 0) — inside
+ * arm-triton's 60 km reach of all three hulls, outside every SAM ring — and
+ * blinds all three radars at once (~t=411-429). Each striker then dashes
+ * from a safe hold to a close release point *inside* the target's own SAM
+ * ring and fires while the radar is dark, egressing the moment it fires.
+ * The most cinematic of the three: it uses every asset in the package.
+ */
+export function taiwanStrikePlanA(): Order[] {
+  return [
+    { atTick: 0, type: 'SET_ROE', side: 'BLUE', level: 'TIGHT' },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-sead-1', waypoints: [{ x: -50_000, y: 0, alt: 9_000 }] },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: -60_000, y: -9_000, alt: 8_000 }] },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [{ x: -60_000, y: 9_000, alt: 8_000 }] },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-3', waypoints: [{ x: -45_000, y: 0, alt: 8_000 }] },
+    // SEAD opens all three radars at once, from total safety.
+    { atTick: 365, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'arm-triton', targetId: 'red-corvette-1' },
+    { atTick: 365, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'arm-triton', targetId: 'red-corvette-2' },
+    { atTick: 365, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'arm-triton', targetId: 'red-frigate-1' },
+    // Dash into the (now-blind) SAM rings once the shutdown windows are open.
+    { atTick: 420, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: -30_000, y: -9_000, alt: 8_000 }] },
+    { atTick: 420, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [{ x: -30_000, y: 9_000, alt: 8_000 }] },
+    { atTick: 440, type: 'SET_WAYPOINTS', unitId: 'blue-striker-3', waypoints: [{ x: -25_000, y: 0, alt: 8_000 }] },
+    { atTick: 540, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'asm-pike', targetId: 'red-corvette-1' },
+    { atTick: 541, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'asm-pike', targetId: 'red-corvette-1' },
+    { atTick: 540, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'asm-pike', targetId: 'red-corvette-2' },
+    { atTick: 541, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'asm-pike', targetId: 'red-corvette-2' },
+    { atTick: 521, type: 'ENGAGE', unitId: 'blue-striker-3', weaponId: 'asm-pike', targetId: 'red-frigate-1' },
+    { atTick: 522, type: 'ENGAGE', unitId: 'blue-striker-3', weaponId: 'asm-pike', targetId: 'red-frigate-1' },
+    { atTick: 523, type: 'ENGAGE', unitId: 'blue-striker-3', weaponId: 'asm-pike', targetId: 'red-frigate-1' },
+    // Egress immediately — clear of every ring well inside the blink window.
+    { atTick: 542, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: -60_000, y: -9_000, alt: 8_000 }] },
+    { atTick: 542, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [{ x: -60_000, y: 9_000, alt: 8_000 }] },
+    { atTick: 524, type: 'SET_WAYPOINTS', unitId: 'blue-striker-3', waypoints: [{ x: -45_000, y: 0, alt: 8_000 }] },
+  ];
+}
+
+/**
+ * Plan B — pure standoff, no SEAD required: asm-pike's 80 km reach
+ * outranges every SAM ring here (corvette 20 km, frigate 34 km) by a wide
+ * margin, and its release envelope reaches past both hulls' effective radar
+ * detection range against a 3 m² airframe (~53 km / ~62 km). Holding at
+ * 65-70 km, no RED radar ever gets a track — the strikers fire from
+ * complete safety and Viper never has to leave its hold.
+ */
+export function taiwanStrikePlanB(): Order[] {
+  return [
+    { atTick: 0, type: 'SET_ROE', side: 'BLUE', level: 'TIGHT' },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: -80_000, y: -9_000, alt: 8_000 }] },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [{ x: -80_000, y: 9_000, alt: 8_000 }] },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-3', waypoints: [{ x: -70_000, y: 0, alt: 8_000 }] },
+    { atTick: 245, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'asm-pike', targetId: 'red-corvette-1' },
+    { atTick: 246, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'asm-pike', targetId: 'red-corvette-1' },
+    { atTick: 245, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'asm-pike', targetId: 'red-corvette-2' },
+    { atTick: 246, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'asm-pike', targetId: 'red-corvette-2' },
+    { atTick: 285, type: 'ENGAGE', unitId: 'blue-striker-3', weaponId: 'asm-pike', targetId: 'red-frigate-1' },
+    { atTick: 286, type: 'ENGAGE', unitId: 'blue-striker-3', weaponId: 'asm-pike', targetId: 'red-frigate-1' },
+  ];
+}
+
+/**
+ * Plan C — combined arms: the two corvettes die to the same pure standoff
+ * shot as Plan B (their own SAM rings are never a factor), while the
+ * frigate — the deeper, longer-ringed hull — gets the SEAD-then-dash
+ * treatment. Viper still blinds all three radars at once: Hammer 3's dash
+ * on the frigate cuts directly between the two corvettes and transits
+ * their rings even though it never fires on them.
+ */
+export function taiwanStrikePlanC(): Order[] {
+  return [
+    { atTick: 0, type: 'SET_ROE', side: 'BLUE', level: 'TIGHT' },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-sead-1', waypoints: [{ x: -50_000, y: 0, alt: 9_000 }] },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: -80_000, y: -9_000, alt: 8_000 }] },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [{ x: -80_000, y: 9_000, alt: 8_000 }] },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-3', waypoints: [{ x: -45_000, y: 0, alt: 8_000 }] },
+    { atTick: 245, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'asm-pike', targetId: 'red-corvette-1' },
+    { atTick: 246, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'asm-pike', targetId: 'red-corvette-1' },
+    { atTick: 245, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'asm-pike', targetId: 'red-corvette-2' },
+    { atTick: 246, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'asm-pike', targetId: 'red-corvette-2' },
+    { atTick: 365, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'arm-triton', targetId: 'red-corvette-1' },
+    { atTick: 365, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'arm-triton', targetId: 'red-corvette-2' },
+    { atTick: 365, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'arm-triton', targetId: 'red-frigate-1' },
+    { atTick: 440, type: 'SET_WAYPOINTS', unitId: 'blue-striker-3', waypoints: [{ x: -25_000, y: 0, alt: 8_000 }] },
+    { atTick: 520, type: 'ENGAGE', unitId: 'blue-striker-3', weaponId: 'asm-pike', targetId: 'red-frigate-1' },
+    { atTick: 521, type: 'ENGAGE', unitId: 'blue-striker-3', weaponId: 'asm-pike', targetId: 'red-frigate-1' },
+    { atTick: 522, type: 'ENGAGE', unitId: 'blue-striker-3', weaponId: 'asm-pike', targetId: 'red-frigate-1' },
+    { atTick: 523, type: 'SET_WAYPOINTS', unitId: 'blue-striker-3', waypoints: [{ x: -45_000, y: 0, alt: 8_000 }] },
+  ];
+}
+
 /** Jamming shortens the early-warning picture but nobody shuts the SAM up. */
 export function jamOnlyPlan(): Order[] {
   return [
