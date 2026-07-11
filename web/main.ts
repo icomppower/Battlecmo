@@ -5,12 +5,18 @@ import { buildAdaptiveStrikeScenario } from '../src/scenarios/strike-adaptive';
 import { buildRescueScenario } from '../src/scenarios/rescue-op';
 import { buildEscalationScenario } from '../src/scenarios/strike-escalation';
 import { buildFjordScenario } from '../src/scenarios/strike-fjord';
+import { buildConvoyScenario } from '../src/scenarios/strike-convoy';
+import { buildPicketScenario } from '../src/scenarios/strike-picket';
 import {
   baitAndBlinkPlan,
+  convoyPlan,
   decoyPackage,
   decoySweepPlan,
   escalationPackage,
   escalationPlan,
+  naiveConvoyPlan,
+  picketHazardPlan,
+  picketSafePlan,
   sensorWarPackage,
   sensorWarPlan,
   fjordPlan,
@@ -43,6 +49,8 @@ const SCENARIOS: Record<string, () => SimState> = {
   'rescue-op': buildRescueScenario,
   'strike-escalation': buildEscalationScenario,
   'strike-fjord': buildFjordScenario,
+  'strike-convoy': buildConvoyScenario,
+  'strike-picket': buildPicketScenario,
 };
 
 const PRESETS: Record<string, { plan: () => Order[]; scenario: string; pkg?: () => AircraftConfig[] }> = {
@@ -55,6 +63,10 @@ const PRESETS: Record<string, { plan: () => Order[]; scenario: string; pkg?: () 
   escalation: { plan: escalationPlan, scenario: 'strike-escalation', pkg: escalationPackage },
   sensorwar: { plan: sensorWarPlan, scenario: 'strike-escalation', pkg: sensorWarPackage },
   fjord: { plan: fjordPlan, scenario: 'strike-fjord' },
+  naiveconvoy: { plan: naiveConvoyPlan, scenario: 'strike-convoy' },
+  convoy: { plan: convoyPlan, scenario: 'strike-convoy' },
+  pickethazard: { plan: picketHazardPlan, scenario: 'strike-picket' },
+  picketsafe: { plan: picketSafePlan, scenario: 'strike-picket' },
   // The brief says a staff solution is on file — this loads it. It is the
   // generator's own constructive winnability proof, timed to this mission's
   // sampled geometry and the nemesis's current doctrine.
@@ -851,7 +863,11 @@ function missionOutcome(state: SimState): { cls: string; text: string } | null {
     }
     return null; // rescue verdict waits for the ground op
   }
-  if (!state.units['red-hq']!.alive) {
+  // The objective unit id varies by scenario (a land C2 node for the strike
+  // missions, the HVU for the convoy problem); scenarios with neither (the
+  // picket vignette) simply have no destroy-the-objective verdict to show.
+  const objective = state.units['red-hq'] ?? state.units['red-supply-1'];
+  if (objective && !objective.alive) {
     return { cls: 'success', text: 'MISSION SUCCESS — OBJECTIVE DESTROYED' };
   }
   // Strike element = every armed BLUE fixed-wing (package composition varies).
