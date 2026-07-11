@@ -46,7 +46,17 @@ export interface CampaignState {
   nemesis: NemesisProfile;
   squadron: AirframeRecord[];
   roster: Operator[];
+  /** Stock pool, rounds remaining per weapon id — the "rearm" half of rest & rearm. */
+  stores: Record<string, number>;
 }
+
+/** Starting rounds per weapon id — generous enough for a multi-mission campaign. */
+export const STARTING_STOCK: Record<string, number> = {
+  'agm-stormbreak': 20,
+  'arm-lance': 12,
+  'aam-dart': 12,
+  'asm-pike': 6,
+};
 
 export function newCampaign(roster: Operator[]): CampaignState {
   return {
@@ -69,6 +79,7 @@ export function newCampaign(roster: Operator[]): CampaignState {
       { unitId: 'blue-awacs-1', pilot: 'CDR Halevy', missions: 0, fatigue: 0, status: 'READY' },
     ],
     roster,
+    stores: { ...STARTING_STOCK },
   };
 }
 
@@ -302,6 +313,34 @@ export function updateRoster(final: SimState): Operator[] {
   return roster.map((o) => (o.status === 'KIA' ? { ...o } : { ...o, missions: o.missions + 1 }));
 }
 
+/**
+ * Rest recovers pilot fatigue without flying a mission: −1 fatigue per
+ * skipped mission per pilot, floored at 0. A LOST airframe has no pilot left
+ * to rest. `missionsSkipped` lets one REST press stand for more than one
+ * down cycle if the UI ever wants that; today's REST button always passes 1.
+ */
+export function restSquadron(squadron: AirframeRecord[], missionsSkipped: number): AirframeRecord[] {
+  return squadron.map((rec) =>
+    rec.status === 'LOST' ? rec : { ...rec, fatigue: Math.max(0, rec.fatigue - missionsSkipped) },
+  );
+}
+
+/**
+ * Deplete the stock pool by every BLUE weapon actually launched this
+ * mission (RED's own SAM rounds are its problem, not the player's stores).
+ * The LAUNCH event already carries the weapon id, so this is a straight
+ * tally against the event log — no extra bookkeeping in the tick core.
+ */
+export function expendStores(stores: Record<string, number>, final: SimState): Record<string, number> {
+  const next = { ...stores };
+  for (const e of final.events) {
+    if (e.type === 'LAUNCH' && e.side === 'BLUE') {
+      next[e.weaponId] = Math.max(0, (next[e.weaponId] ?? 0) - 1);
+    }
+  }
+  return next;
+}
+
 /** Advance the campaign past a finished mission. */
 export function debriefCampaign(campaign: CampaignState, final: SimState): CampaignState {
   return {
@@ -309,5 +348,6 @@ export function debriefCampaign(campaign: CampaignState, final: SimState): Campa
     nemesis: adaptNemesis(campaign.nemesis, final),
     squadron: updateSquadron(campaign.squadron, final),
     roster: final.groundOp ? updateRoster(final) : campaign.roster,
+    stores: expendStores(campaign.stores, final),
   };
 }

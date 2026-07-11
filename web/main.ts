@@ -32,15 +32,25 @@ import {
   applySquadronState,
   debriefCampaign,
   newCampaign,
+  restSquadron,
+  STARTING_STOCK,
   type CampaignState,
 } from '../src/campaign/campaign';
 import { importRoster } from '../src/scenarios/breach-roster';
 import { generateMission } from '../src/campaign/generator';
+import { deserializeMission, serializeMission, type Mission } from '../src/replay/mission-io';
 import type { Order, RoeLevel, SimEvent, SimState, Vec3 } from '../src/core/types';
 import { Renderer, type View } from './render';
 import { initBuilder } from './builder';
 
-const SEED = 42;
+/**
+ * The tick seed for the mission currently on the timeline. 42 is the default
+ * every preset and scenario switch uses; IMPORT is the only thing that ever
+ * sets it to something else (a mission file carries its own seed), and every
+ * other reset path restores the default so an imported seed never leaks into
+ * an unrelated mission.
+ */
+let SEED = 42;
 const MAX_RUN_TICKS = 1_800;
 
 const SCENARIOS: Record<string, () => SimState> = {
@@ -196,6 +206,7 @@ try {
       campaign.nemesis.gapFiller ??= false; // migrate pre-axes saves
       campaign.nemesis.pointDefenseAlert ??= false;
       campaign.nemesis.decoyDiscrimination ??= false;
+      campaign.stores ??= { ...STARTING_STOCK }; // migrate pre-stores saves
       campaignApplied = !!saved.campaignApplied;
     }
   }
@@ -370,6 +381,7 @@ document.getElementById('godview')!.addEventListener('click', () => {
 });
 
 document.getElementById('reset')!.addEventListener('click', () => {
+  SEED = 42; // RESET MISSION always returns to the default seed.
   timeline.reset();
   selectedId = null;
   speed = 0;
@@ -378,6 +390,7 @@ document.getElementById('reset')!.addEventListener('click', () => {
 
 const scenarioSelect = document.getElementById('scenario') as HTMLSelectElement;
 scenarioSelect.addEventListener('change', () => {
+  SEED = 42; // switching scenarios leaves any imported seed behind.
   timeline.reset(scenarioBuild(scenarioSelect.value));
   selectedId = null;
   speed = 0;
@@ -396,6 +409,7 @@ initBuilder(
     const rec = campaign.squadron.find((r) => r.unitId === unitId);
     return rec ? { pilot: rec.pilot, lost: rec.status === 'LOST' } : undefined;
   },
+  () => campaign.stores,
 );
 
 document.getElementById('replay')!.addEventListener('click', () => {
@@ -469,6 +483,7 @@ const presetSelect = document.getElementById('preset') as HTMLSelectElement;
 presetSelect.addEventListener('change', () => {
   const preset = PRESETS[presetSelect.value];
   if (!preset) return;
+  SEED = 42; // presets are always authored against the default seed.
   scenarioSelect.value = preset.scenario;
   // Presets that need a specific force composition bring their package.
   if (preset.pkg) packageConfigs = preset.pkg();
@@ -477,6 +492,53 @@ presetSelect.addEventListener('change', () => {
   selectedId = null;
   speed = 0;
   onMissionReset();
+});
+
+// ---- plan export / import (triage item C) ----------------------------------
+
+document.getElementById('planexport')!.addEventListener('click', () => {
+  if (scenarioSelect.value === 'generated') {
+    alert('Generated tasking is campaign-specific (it depends on mission number and nemesis doctrine) and cannot be exported as a portable mission file.');
+    return;
+  }
+  const mission: Mission = {
+    scenario: scenarioSelect.value,
+    packageConfigs,
+    orders: timeline.orders,
+    seed: SEED,
+  };
+  const blob = new Blob([serializeMission(mission)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `overwatch-mission-${mission.scenario}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+const importInput = document.getElementById('planimportfile') as HTMLInputElement;
+document.getElementById('planimport')!.addEventListener('click', () => importInput.click());
+importInput.addEventListener('change', () => {
+  const file = importInput.files?.[0];
+  importInput.value = ''; // allow re-importing the same filename later
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const mission = deserializeMission(String(reader.result));
+      packageConfigs = mission.packageConfigs;
+      SEED = mission.seed;
+      scenarioSelect.value = mission.scenario;
+      timeline.reset(scenarioBuild(mission.scenario));
+      timeline.orders = mission.orders;
+      selectedId = null;
+      speed = 0;
+      onMissionReset();
+    } catch (err) {
+      alert(`Import failed: ${(err as Error).message}`);
+    }
+  };
+  reader.readAsText(file);
 });
 
 document.getElementById('runend')!.addEventListener('click', () => {
@@ -610,6 +672,20 @@ document.getElementById('campaignadvance')!.addEventListener('click', () => {
   document.getElementById('campaignopen')!.classList.add('on');
 });
 
+document.getElementById('campaignrest')!.addEventListener('click', () => {
+  // REST is deliberately simpler than DEBRIEF & ADVANCE: it stands the
+  // squadron down for one cycle so pilots recover fatigue, and nothing
+  // else. It does NOT advance missionNumber and does NOT call
+  // adaptNemesis — no mission was flown, so there is no event log for the
+  // enemy staff to read, and the generated tasking (keyed on missionNumber)
+  // stays exactly what it was. Stores are untouched too: resting pilots
+  // doesn't resupply munitions, only a flown/skipped mission's bookkeeping
+  // does that.
+  campaign = { ...campaign, squadron: restSquadron(campaign.squadron, 1) };
+  saveCampaign();
+  renderCampaign();
+});
+
 document.getElementById('campaignreset')!.addEventListener('click', () => {
   campaign = newCampaign(importRoster());
   campaignApplied = false;
@@ -643,12 +719,17 @@ function renderCampaign(): void {
   const tasking = currentTasking()
     .brief.map((line) => `<div class="note">▸ ${esc(line)}</div>`)
     .join('');
+  const stores = Object.keys(campaign.stores)
+    .sort()
+    .map((weaponId) => `<div class="row"><span class="k">${esc(weaponId)}</span><span>${campaign.stores[weaponId]}</span></div>`)
+    .join('');
   document.getElementById('campaignbody')!.innerHTML =
     `<div class="row"><span class="k">mission</span><span>#${campaign.missionNumber}</span></div>` +
     `<div class="row"><span class="k">campaign effects</span><span>${campaignApplied ? 'APPLIED (doctrine adapted, wear carried)' : 'not yet — mission 1 as briefed'}</span></div>` +
     `<h3 style="margin-top:12px;">Enemy staff notes (INTSUM)</h3>${notes}` +
     `<h3 style="margin-top:12px;">Generated tasking (scenario: generated strike)</h3>${tasking}` +
     `<h3 style="margin-top:12px;">Squadron</h3>${sq}` +
+    `<h3 style="margin-top:12px;">Stores (rounds remaining)</h3>${stores}` +
     `<h3 style="margin-top:12px;">Ground roster</h3>${roster}`;
 }
 

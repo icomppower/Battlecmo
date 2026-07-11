@@ -288,6 +288,20 @@ export const STORES: Record<string, StoreDef> = {
   },
 };
 
+/**
+ * Whether a store can still be mounted given the campaign's stock pool
+ * (triage item F — rest & rearm bookkeeping). Only WEAPON stores consume
+ * stock (keyed by the weapon id they carry, in rounds); jammer pods, tanks,
+ * sensor pods and signature augments are hardware, not munitions, and are
+ * always available. The Mission Builder uses this to grey out — and refuse
+ * to drop — a store the squadron is out of.
+ */
+export function storeAvailable(storeId: string, stock: Record<string, number>): boolean {
+  const store = STORES[storeId];
+  if (!store || store.kind !== 'WEAPON') return true;
+  return (stock[store.weaponId!] ?? 0) >= store.rounds!;
+}
+
 export interface AircraftConfig {
   /** Unit id in the sim — role-prefixed ids keep preset plans addressable. */
   id: string;
