@@ -3,6 +3,7 @@ import {
   STORES,
   configStats,
   referencePackage,
+  storeAvailable,
   validateConfig,
   type AircraftConfig,
   type AirframeDef,
@@ -42,6 +43,7 @@ export interface SquadronInfo {
 export function initBuilder(
   onCommit: (configs: AircraftConfig[]) => void,
   squadronInfo?: (unitId: string) => SquadronInfo | undefined,
+  getStock?: () => Record<string, number>,
 ): void {
   const overlay = document.getElementById('builderoverlay')!;
   const hangar = document.getElementById('hangar')!;
@@ -71,9 +73,23 @@ export function initBuilder(
       .join(''),
   );
 
-  armory.insertAdjacentHTML(
-    'beforeend',
-    Object.values(STORES)
+  const armoryCards = document.createElement('div');
+  // .bcol's flex gap only applies to its direct children — mirror it here so
+  // wrapping the cards in this re-renderable container doesn't collapse the
+  // spacing between them.
+  armoryCards.style.cssText = 'display:flex; flex-direction:column; gap:6px;';
+  armory.appendChild(armoryCards);
+
+  /**
+   * Re-rendered every time the builder opens (not just once at init) so the
+   * stock pool reflects whatever the campaign looked like most recently —
+   * REST and DEBRIEF & ADVANCE both change it while this overlay is closed.
+   * A WEAPON store the squadron can't afford is greyed out and undraggable;
+   * the drop handler below refuses it a second time regardless.
+   */
+  function renderArmory(): void {
+    const stock = getStock?.() ?? {};
+    armoryCards.innerHTML = Object.values(STORES)
       .map((st) => {
         const effect =
           st.kind === 'WEAPON'
@@ -81,15 +97,20 @@ export function initBuilder(
             : st.kind === 'JAMMER_POD'
               ? `jammer ${Math.round(st.jammer!.range / 1000)} km`
               : `+${st.fuelKg} kg fuel`;
+        const available = storeAvailable(st.id, stock);
+        const stockLine = st.kind === 'WEAPON' ? ` · stock ${stock[st.weaponId!] ?? 0}` : '';
         return (
-          `<div class="card" draggable="true" data-drag='${JSON.stringify({ kind: 'store', id: st.id })}'>` +
+          `<div class="card${available ? '' : ' outofstock'}" draggable="${available}"` +
+          `${available ? ` data-drag='${JSON.stringify({ kind: 'store', id: st.id })}'` : ''}>` +
           `<div>${esc(st.name)}</div>` +
-          `<div class="sub">${st.stations} stn · +${st.rcsAdd} m² RCS · +${st.burnAdd} kg/s · ${effect}</div>` +
+          `<div class="sub">${st.stations} stn · +${st.rcsAdd} m² RCS · +${st.burnAdd} kg/s · ${effect}${stockLine}</div>` +
+          (available ? '' : `<div class="errline">⚠ out of stock</div>`) +
           `</div>`
         );
       })
-      .join(''),
-  );
+      .join('');
+  }
+  renderArmory();
 
   document.addEventListener('dragstart', (e) => {
     const card = (e.target as HTMLElement).closest?.('[data-drag]');
@@ -194,6 +215,9 @@ export function initBuilder(
     const acft = (e.target as HTMLElement).closest?.<HTMLElement>('[data-acft]');
     const p = payloadOf(e);
     if (!acft || !p || p.kind !== 'store' || !STORES[p.id]) return;
+    // Refuse the mount even if a stale drag payload slipped past the
+    // undraggable armory card (belt-and-braces — the stock check is cheap).
+    if (!storeAvailable(p.id, getStock?.() ?? {})) return;
     e.preventDefault();
     e.stopPropagation();
     configs[Number(acft.dataset.acft)]!.stores.push(p.id);
@@ -221,6 +245,7 @@ export function initBuilder(
 
   openBtn.addEventListener('click', () => {
     overlay.classList.add('open');
+    renderArmory();
     renderPackage();
   });
   document.getElementById('builderclose')!.addEventListener('click', () => {
