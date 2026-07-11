@@ -6,6 +6,7 @@ import { buildEscalationScenario } from '../scenarios/strike-escalation';
 import { buildFjordScenario } from '../scenarios/strike-fjord';
 import { buildConvoyScenario } from '../scenarios/strike-convoy';
 import { buildPicketScenario } from '../scenarios/strike-picket';
+import { buildEpicFuryScenario } from '../scenarios/strike-epicfury';
 import { validateConfig, withBluePackage, type AircraftConfig } from '../oob/assembly';
 
 /**
@@ -39,6 +40,7 @@ const SCENARIO_BUILDERS: Record<string, () => SimState> = {
   'strike-fjord': buildFjordScenario,
   'strike-convoy': buildConvoyScenario,
   'strike-picket': buildPicketScenario,
+  'strike-epicfury': buildEpicFuryScenario,
 };
 
 /** Order variants that carry a unit id, worth validating against the scenario's OOB. */

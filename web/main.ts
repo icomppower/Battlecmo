@@ -7,11 +7,15 @@ import { buildEscalationScenario } from '../src/scenarios/strike-escalation';
 import { buildFjordScenario } from '../src/scenarios/strike-fjord';
 import { buildConvoyScenario } from '../src/scenarios/strike-convoy';
 import { buildPicketScenario } from '../src/scenarios/strike-picket';
+import { buildEpicFuryScenario } from '../src/scenarios/strike-epicfury';
 import {
   baitAndBlinkPlan,
   convoyPlan,
   decoyPackage,
   decoySweepPlan,
+  epicFuryPlanA,
+  epicFuryPlanB,
+  epicFuryPlanC,
   escalationPackage,
   escalationPlan,
   naiveConvoyPlan,
@@ -61,6 +65,7 @@ const SCENARIOS: Record<string, () => SimState> = {
   'strike-fjord': buildFjordScenario,
   'strike-convoy': buildConvoyScenario,
   'strike-picket': buildPicketScenario,
+  'strike-epicfury': buildEpicFuryScenario,
 };
 
 const PRESETS: Record<string, { plan: () => Order[]; scenario: string; pkg?: () => AircraftConfig[] }> = {
@@ -77,6 +82,9 @@ const PRESETS: Record<string, { plan: () => Order[]; scenario: string; pkg?: () 
   convoy: { plan: convoyPlan, scenario: 'strike-convoy' },
   pickethazard: { plan: picketHazardPlan, scenario: 'strike-picket' },
   picketsafe: { plan: picketSafePlan, scenario: 'strike-picket' },
+  epicfurya: { plan: epicFuryPlanA, scenario: 'strike-epicfury' },
+  epicfuryb: { plan: epicFuryPlanB, scenario: 'strike-epicfury' },
+  epicfuryc: { plan: epicFuryPlanC, scenario: 'strike-epicfury' },
   // The brief says a staff solution is on file — this loads it. It is the
   // generator's own constructive winnability proof, timed to this mission's
   // sampled geometry and the nemesis's current doctrine.

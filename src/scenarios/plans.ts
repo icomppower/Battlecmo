@@ -604,3 +604,119 @@ export function jamOnlyPlan(): Order[] {
     { atTick: 455, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'agm-stormbreak', targetId: 'red-hq' },
   ];
 }
+
+// ---------------------------------------------------------------------------
+// Operation Epic Fury (strike-epicfury scenario) — demo/showcase reference
+// plans. No losing plan, no adversarial timing: every SAM here is ACTIVE
+// (always radiating) and the land battery's suppression window is a
+// generous 500 ticks, so these plans just have to get the geometry right,
+// not thread a needle. All three fully clear the target set (both SAM/naval
+// sites, the leadership site, the nuclear-related facility, and the
+// ballistic-missile infrastructure) using a different mix of the fixed BLUE
+// roster.
+// ---------------------------------------------------------------------------
+
+/**
+ * Plan A — cruise-missile SEAD-first, bomber-heavy. blue-arsenal-1's
+ * Tomahawk-analogs (subsonic, ~750-780 ticks in flight from 180+ km of
+ * stand-off) open the mission against the air-defense site and the missile
+ * infrastructure — no SEAD needed, a GROUND-domain standoff shot never
+ * cares whether the site's radar is up. Once those TLAMs have landed
+ * (~t=780), the two low-RCS bombers dash the last ~30 km and release on the
+ * nuclear facility and the leadership site. The naval targets never depend
+ * on timing at all: the drone and Viper each hold at a range inside
+ * asm-standoff's 90 km reach but outside the ships' 25 km SAM ring, so they
+ * fire from total safety at t=0.
+ */
+export function epicFuryPlanA(): Order[] {
+  return [
+    { atTick: 0, type: 'SET_ROE', side: 'BLUE', level: 'TIGHT' },
+    // Tomahawks: SEAD-first against the air-defense site, plus a direct
+    // strike on the missile infrastructure. No track quality required.
+    { atTick: 0, type: 'ENGAGE', unitId: 'blue-arsenal-1', weaponId: 'tlam-blk5', targetId: 'red-sam-1' },
+    { atTick: 1, type: 'ENGAGE', unitId: 'blue-arsenal-1', weaponId: 'tlam-blk5', targetId: 'red-sam-1' },
+    { atTick: 2, type: 'ENGAGE', unitId: 'blue-arsenal-1', weaponId: 'tlam-blk5', targetId: 'red-missile-1' },
+    { atTick: 3, type: 'ENGAGE', unitId: 'blue-arsenal-1', weaponId: 'tlam-blk5', targetId: 'red-missile-1' },
+    // Naval targets: total stand-off, no SEAD required.
+    { atTick: 0, type: 'ENGAGE', unitId: 'blue-drone-1', weaponId: 'asm-standoff', targetId: 'red-corvette-1' },
+    { atTick: 1, type: 'ENGAGE', unitId: 'blue-drone-1', weaponId: 'asm-standoff', targetId: 'red-corvette-1' },
+    { atTick: 0, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'asm-standoff', targetId: 'red-frigate-1' },
+    { atTick: 1, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'asm-standoff', targetId: 'red-frigate-1' },
+    // Bombers dash once the air-defense site is confirmed dead (~t=780).
+    { atTick: 900, type: 'SET_WAYPOINTS', unitId: 'blue-bomber-1', waypoints: [{ x: 10_000, y: 5_000, alt: 11_000 }] },
+    { atTick: 900, type: 'SET_WAYPOINTS', unitId: 'blue-bomber-2', waypoints: [{ x: 12_000, y: -4_000, alt: 11_000 }] },
+    { atTick: 1_050, type: 'ENGAGE', unitId: 'blue-bomber-1', weaponId: 'agm-stormbreak', targetId: 'red-nuclear-1' },
+    { atTick: 1_051, type: 'ENGAGE', unitId: 'blue-bomber-1', weaponId: 'agm-stormbreak', targetId: 'red-nuclear-1' },
+    { atTick: 1_050, type: 'ENGAGE', unitId: 'blue-bomber-2', weaponId: 'agm-stormbreak', targetId: 'red-leadership-site' },
+    { atTick: 1_051, type: 'ENGAGE', unitId: 'blue-bomber-2', weaponId: 'agm-stormbreak', targetId: 'red-leadership-site' },
+  ];
+}
+
+/**
+ * Plan B — drone/strike-aircraft-heavy, classic reactive SEAD. No
+ * Tomahawks, no bombers. Viper's arm-lance opens from 50 km (inside its own
+ * 70 km reach, outside the site's 40 km engagement ring), forcing the
+ * site's radar dark (~t=58, a 500-tick window) with nothing to shoot back
+ * with — the site has no passive sensor, so a suppressed radar is a blind
+ * site. Both Hammers dash in at t=70, each releasing on two DMPIs from one
+ * release point apiece. The naval targets are the same total-standoff shots
+ * as Plan A (they don't depend on the land SEAD timing at all).
+ */
+export function epicFuryPlanB(): Order[] {
+  return [
+    { atTick: 0, type: 'SET_ROE', side: 'BLUE', level: 'TIGHT' },
+    { atTick: 0, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'arm-lance', targetId: 'red-sam-1' },
+    // Naval: total stand-off, fired immediately.
+    { atTick: 0, type: 'ENGAGE', unitId: 'blue-drone-1', weaponId: 'asm-standoff', targetId: 'red-corvette-1' },
+    { atTick: 1, type: 'ENGAGE', unitId: 'blue-drone-1', weaponId: 'asm-standoff', targetId: 'red-corvette-1' },
+    // Dash once the ARM has crossed into the site's reaction range (~t=58).
+    { atTick: 70, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: 10_000, y: 3_000, alt: 8_000 }] },
+    { atTick: 70, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [{ x: 14_000, y: -1_000, alt: 8_000 }] },
+    // Hammer 1: kill the (now-blind) air-defense site, then the nuclear facility.
+    { atTick: 210, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'agm-stormbreak', targetId: 'red-sam-1' },
+    { atTick: 211, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'agm-stormbreak', targetId: 'red-sam-1' },
+    { atTick: 212, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'agm-stormbreak', targetId: 'red-nuclear-1' },
+    { atTick: 213, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'agm-stormbreak', targetId: 'red-nuclear-1' },
+    // Hammer 2: the leadership site and the missile infrastructure.
+    { atTick: 230, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'agm-stormbreak', targetId: 'red-leadership-site' },
+    { atTick: 231, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'agm-stormbreak', targetId: 'red-leadership-site' },
+    { atTick: 232, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'agm-stormbreak', targetId: 'red-missile-1' },
+    { atTick: 233, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'agm-stormbreak', targetId: 'red-missile-1' },
+    // Viper finishes the frigate from stand-off once its rail is free of ARMs.
+    { atTick: 0, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'asm-standoff', targetId: 'red-frigate-1' },
+    { atTick: 1, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'asm-standoff', targetId: 'red-frigate-1' },
+  ];
+}
+
+/**
+ * Plan C — coalition mix: Tomahawks reserved for the two hardened,
+ * highest-value facilities (nuclear + missile infrastructure); reactive
+ * SEAD + a single striker takes the air-defense site and the leadership
+ * site; the drone and Viper handle the naval targets exactly as in A/B. A
+ * third distinct asset allocation, same full-clear outcome.
+ */
+export function epicFuryPlanC(): Order[] {
+  return [
+    { atTick: 0, type: 'SET_ROE', side: 'BLUE', level: 'TIGHT' },
+    // Tomahawks: the two hardened facilities, direct precision strikes.
+    { atTick: 0, type: 'ENGAGE', unitId: 'blue-arsenal-1', weaponId: 'tlam-blk5', targetId: 'red-nuclear-1' },
+    { atTick: 1, type: 'ENGAGE', unitId: 'blue-arsenal-1', weaponId: 'tlam-blk5', targetId: 'red-nuclear-1' },
+    { atTick: 2, type: 'ENGAGE', unitId: 'blue-arsenal-1', weaponId: 'tlam-blk5', targetId: 'red-missile-1' },
+    { atTick: 3, type: 'ENGAGE', unitId: 'blue-arsenal-1', weaponId: 'tlam-blk5', targetId: 'red-missile-1' },
+    // Reactive land SEAD against the air-defense site.
+    { atTick: 0, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'arm-lance', targetId: 'red-sam-1' },
+    // Naval: total stand-off.
+    { atTick: 0, type: 'ENGAGE', unitId: 'blue-drone-1', weaponId: 'asm-standoff', targetId: 'red-corvette-1' },
+    { atTick: 1, type: 'ENGAGE', unitId: 'blue-drone-1', weaponId: 'asm-standoff', targetId: 'red-corvette-1' },
+    { atTick: 0, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'asm-standoff', targetId: 'red-frigate-1' },
+    { atTick: 1, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'asm-standoff', targetId: 'red-frigate-1' },
+    // Hammer 1 dashes once the site is blind (~t=58) and kills it, then
+    // swings on the leadership site from the same release point's neighborhood.
+    { atTick: 70, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: 10_000, y: 1_500, alt: 8_000 }] },
+    { atTick: 210, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'agm-stormbreak', targetId: 'red-sam-1' },
+    { atTick: 211, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'agm-stormbreak', targetId: 'red-sam-1' },
+    { atTick: 220, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: 14_000, y: -2_000, alt: 8_000 }] },
+    { atTick: 300, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'agm-stormbreak', targetId: 'red-leadership-site' },
+    { atTick: 301, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'agm-stormbreak', targetId: 'red-leadership-site' },
+  ];
+}

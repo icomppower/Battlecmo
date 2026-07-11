@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { run } from '../src/core/tick';
 import { buildStrikeScenario } from '../src/scenarios/strike-basic';
 import { buildEscalationScenario } from '../src/scenarios/strike-escalation';
-import { goodPlan, escalationPackage, escalationPlan, convoyPlan, picketSafePlan } from '../src/scenarios/plans';
+import {
+  goodPlan,
+  escalationPackage,
+  escalationPlan,
+  convoyPlan,
+  picketSafePlan,
+  epicFuryPlanA,
+} from '../src/scenarios/plans';
 import { deserializeMission, serializeMission, type Mission } from '../src/replay/mission-io';
 
 describe('mission export/import round-trip (triage item C)', () => {
@@ -68,6 +75,7 @@ describe('mission export/import round-trip (triage item C)', () => {
     for (const [scenario, orders] of [
       ['strike-convoy', convoyPlan()],
       ['strike-picket', picketSafePlan()],
+      ['strike-epicfury', epicFuryPlanA()],
     ] as const) {
       const mission: Mission = { scenario, packageConfigs: null, orders, seed: 42 };
       const restored = deserializeMission(serializeMission(mission));
