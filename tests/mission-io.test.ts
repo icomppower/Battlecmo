@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { run } from '../src/core/tick';
 import { buildStrikeScenario } from '../src/scenarios/strike-basic';
 import { buildEscalationScenario } from '../src/scenarios/strike-escalation';
-import { goodPlan, escalationPackage, escalationPlan } from '../src/scenarios/plans';
+import { goodPlan, escalationPackage, escalationPlan, convoyPlan, picketSafePlan } from '../src/scenarios/plans';
 import { deserializeMission, serializeMission, type Mission } from '../src/replay/mission-io';
 
 describe('mission export/import round-trip (triage item C)', () => {
@@ -60,6 +60,19 @@ describe('mission export/import round-trip (triage item C)', () => {
       seed: 1,
     });
     expect(() => deserializeMission(bad)).toThrow(/stations used/);
+  });
+
+  it('accepts every UI scenario, including ones added after this module (registry parity)', () => {
+    // The naval scenarios landed in a parallel branch; this pins the registry
+    // so a new scenario that exports fine can never be rejected on import.
+    for (const [scenario, orders] of [
+      ['strike-convoy', convoyPlan()],
+      ['strike-picket', picketSafePlan()],
+    ] as const) {
+      const mission: Mission = { scenario, packageConfigs: null, orders, seed: 42 };
+      const restored = deserializeMission(serializeMission(mission));
+      expect(restored).toEqual(mission);
+    }
   });
 
   it('defaults a missing packageConfigs to null (stock OOB)', () => {

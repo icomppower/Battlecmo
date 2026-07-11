@@ -4,6 +4,8 @@ import { buildAdaptiveStrikeScenario } from '../scenarios/strike-adaptive';
 import { buildRescueScenario } from '../scenarios/rescue-op';
 import { buildEscalationScenario } from '../scenarios/strike-escalation';
 import { buildFjordScenario } from '../scenarios/strike-fjord';
+import { buildConvoyScenario } from '../scenarios/strike-convoy';
+import { buildPicketScenario } from '../scenarios/strike-picket';
 import { validateConfig, withBluePackage, type AircraftConfig } from '../oob/assembly';
 
 /**
@@ -35,6 +37,8 @@ const SCENARIO_BUILDERS: Record<string, () => SimState> = {
   'rescue-op': buildRescueScenario,
   'strike-escalation': buildEscalationScenario,
   'strike-fjord': buildFjordScenario,
+  'strike-convoy': buildConvoyScenario,
+  'strike-picket': buildPicketScenario,
 };
 
 /** Order variants that carry a unit id, worth validating against the scenario's OOB. */
