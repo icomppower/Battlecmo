@@ -17,6 +17,7 @@ import {
   epicFuryPlanA,
   epicFuryPlanB,
   epicFuryPlanC,
+  epicFuryPlanD,
   escalationPackage,
   escalationPlan,
   naiveConvoyPlan,
@@ -98,6 +99,7 @@ const PRESETS: Record<string, { plan: () => Order[]; scenario: string; pkg?: () 
   epicfurya: { plan: epicFuryPlanA, scenario: 'strike-epicfury' },
   epicfuryb: { plan: epicFuryPlanB, scenario: 'strike-epicfury' },
   epicfuryc: { plan: epicFuryPlanC, scenario: 'strike-epicfury' },
+  epicfuryd: { plan: epicFuryPlanD, scenario: 'strike-epicfury' },
   // The brief says a staff solution is on file — this loads it. It is the
   // generator's own constructive winnability proof, timed to this mission's
   // sampled geometry and the nemesis's current doctrine.
@@ -986,10 +988,40 @@ function missionOutcome(state: SimState): { cls: string; text: string } | null {
  * Cinematic auto-camera: track the missiles if any are flying, otherwise the
  * maneuvering friendlies. Ease toward the target framing each frame.
  */
+/** Fixed close-chase span, meters — a long-range missile in solo cruise gets
+ * framed tight enough that its real speed reads as motion, not a pixel/frame
+ * crawl across a theater-wide shot. */
+const CHASE_SPAN = 45_000;
+
 function updateCinematicCamera(state: SimState): void {
+  const flying = Object.values(state.missiles).filter((m) => m.alive);
+
+  // A tight cluster of missiles in solo cruise (one shot, or a same-target
+  // redundant pair a tick apart) is the "watch it fly" moment: chase the
+  // cluster close instead of holding a wide launch-to-target frame where a
+  // long-range weapon's real speed is invisible. Judge "clustered" by the
+  // missiles' OWN spread, not their distance to target — two rounds fired a
+  // tick apart at the same far-off DMPI are still a tight cluster even
+  // though the target itself is hundreds of km away. A scattered opening
+  // salvo (several shooters, several targets, far apart) falls through to
+  // the wide fit-all framing below instead.
+  if (flying.length > 0) {
+    const mxs = flying.map((m) => m.pos.x);
+    const mys = flying.map((m) => m.pos.y);
+    const spread = Math.max(Math.max(...mxs) - Math.min(...mxs), Math.max(...mys) - Math.min(...mys));
+    if (spread <= CHASE_SPAN) {
+      const cx = (Math.min(...mxs) + Math.max(...mxs)) / 2;
+      const cy = (Math.min(...mys) + Math.max(...mys)) / 2;
+      view.cx += (cx - view.cx) * 0.08;
+      view.cy += (cy - view.cy) * 0.08;
+      const targetScale = Math.min(canvas.width, canvas.height) / CHASE_SPAN;
+      view.scale += (targetScale - view.scale) * 0.05;
+      return;
+    }
+  }
+
   const pts: { x: number; y: number }[] = [];
-  for (const m of Object.values(state.missiles)) {
-    if (!m.alive) continue;
+  for (const m of flying) {
     pts.push(m.pos);
     const t = state.units[m.targetId];
     if (t) pts.push(t.pos);

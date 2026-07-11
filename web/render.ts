@@ -324,25 +324,33 @@ export class Renderer {
       const prevPos = prev?.missiles[m.id]?.pos ?? m.pos;
       const [px, py] = this.toScreen(view, prevPos);
       ctx.strokeStyle = color;
-      ctx.globalAlpha = 0.5;
-      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.7;
+      ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(px, py);
       ctx.lineTo(sx, sy);
       ctx.stroke();
       ctx.globalAlpha = 1;
 
+      // Soft engine-flare glow behind the missile body — the thing your eye
+      // actually catches when it's crawling across a wide theater shot.
       ctx.fillStyle = color;
+      ctx.globalAlpha = 0.25;
       ctx.beginPath();
-      ctx.arc(sx, sy, 2.5, 0, Math.PI * 2);
+      ctx.arc(sx, sy, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 3.5, 0, Math.PI * 2);
       ctx.fill();
 
-      // Dashed intent line to the target.
+      // Dashed intent line to the target — brighter than before so a long,
+      // slow-cruising shot still reads as "going somewhere" between frames.
       const target = state.units[m.targetId];
       if (target) {
         const [tx, ty] = this.toScreen(view, target.pos);
         ctx.strokeStyle = color;
-        ctx.globalAlpha = 0.15;
+        ctx.globalAlpha = 0.3;
         ctx.setLineDash([2, 6]);
         ctx.beginPath();
         ctx.moveTo(sx, sy);

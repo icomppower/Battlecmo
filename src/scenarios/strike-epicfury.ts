@@ -35,11 +35,16 @@ import { WEAPONS } from './strike-basic';
  *   - red-corvette-1   naval target (VERIFIED)
  *   - red-frigate-1    naval target (VERIFIED)
  *
- *  BLUE (fixed roster; the three reference plans each lean on a different
+ *  BLUE (fixed roster; the four reference plans each lean on a different
  *  subset to reach the same full-clear outcome):
  *   - blue-arsenal-1   Tomahawk-analog cruise-missile shooter (SEA), long
  *                      stand-off, subsonic flight (many ticks to arrive —
  *                      this is *why* the run is long).
+ *   - blue-arsenal-2   Poseidon: submarine-launched hypersonic glide-vehicle
+ *                      shooter (SEA), 800 km of stand-off, hypersonic
+ *                      (1,800 m/s) rather than subsonic — Plan D's dedicated
+ *                      showcase weapon, sized to actually be watchable (see
+ *                      hgv-condor's doc comment above).
  *   - blue-bomber-1/2  B-2-analog very-low-RCS heavy strike aircraft —
  *                      af-ranger (the existing strike airframe, cleanRcs 2,
  *                      see oob/assembly.ts) is the lowest-RCS STRIKE-role
@@ -109,6 +114,31 @@ export const EPICFURY_WEAPONS: Record<string, WeaponDef> = {
     pk: 0.6,
     targetDomains: ['AIR'],
     requiredTrackQuality: 0.5,
+  },
+  // Ultra-long-range hypersonic glide-vehicle analog: a submarine-launched
+  // conventional prompt-strike weapon, fired from 800 km of stand-off. Same
+  // "pure data on the domain-generic envelope" story as tlam-blk5 — no
+  // engine change, just a longer maxRange and a much higher `speed`.
+  // Deliberately hypersonic rather than subsonic: at cruise-missile speed
+  // (240 m/s) an 800 km flight takes ~3,300 ticks to arrive — most of it
+  // spent as a single pixel of drift on a theater-wide map, which is the
+  // demo's actual "didn't show anything" bug, not a reason to avoid long
+  // range. At 1,800 m/s (~Mach 5.3) the same flight resolves in ~445 ticks,
+  // short enough that the cinematic chase-cam (see web/main.ts's
+  // updateCinematicCamera, which tracks a lone flying missile close-up
+  // instead of framing the whole launch-to-target span) reads as a fast,
+  // deliberate pass rather than a crawl.
+  'hgv-condor': {
+    id: 'hgv-condor',
+    name: 'Condor HGV (hypersonic glide vehicle, ultra-long-range)',
+    kind: 'AGM',
+    minRange: 50_000,
+    maxRange: 2_500_000, // 2,500 km stand-off
+    minTargetAlt: NUCLEAR_TARGET_ALT.min,
+    maxTargetAlt: NUCLEAR_TARGET_ALT.max,
+    speed: 1_800, // hypersonic, ~mach 5.3
+    pk: 0.88,
+    targetDomains: ['GROUND'],
   },
 };
 
@@ -219,6 +249,23 @@ export function buildEpicFuryScenario(): SimState {
     rcs: 300,
     sensors: [],
     weapons: [{ weaponId: 'tlam-blk5', count: 10 }],
+    waypoints: [],
+    alive: true,
+  };
+
+  // Ultra-long-range showcase asset: submerged, 800 km of stand-off — far
+  // enough that hgv-condor's reach is the point, not a formality.
+  units['blue-arsenal-2'] = {
+    id: 'blue-arsenal-2',
+    side: 'BLUE',
+    domain: 'SEA',
+    name: 'Poseidon (submarine-launched HGV)',
+    pos: { x: -800_000, y: 0, alt: 0 },
+    speed: 0,
+    maxSpeed: 6,
+    rcs: 40,
+    sensors: [],
+    weapons: [{ weaponId: 'hgv-condor', count: 2 }],
     waypoints: [],
     alive: true,
   };

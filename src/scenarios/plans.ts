@@ -815,3 +815,39 @@ export function epicFuryPlanC(): Order[] {
     { atTick: 301, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'agm-stormbreak', targetId: 'red-leadership-site' },
   ];
 }
+
+/**
+ * Plan D — the ultra-long-range showcase. Poseidon's hgv-condor flies solo
+ * from 800 km of stand-off against the missile infrastructure: the naval
+ * standoff shots and the reactive-SEAD ARM all resolve within the first
+ * ~200 ticks, leaving nothing else in flight for most of the HGV's ~445-tick
+ * transit — exactly the "one missile, watch it cross the map" cinematic
+ * moment the chase-cam (updateCinematicCamera in web/main.ts) is built for.
+ * Everything else is Plan B's proven reactive-SEAD choreography, unchanged.
+ */
+export function epicFuryPlanD(): Order[] {
+  return [
+    { atTick: 0, type: 'SET_ROE', side: 'BLUE', level: 'TIGHT' },
+    // Poseidon: the dedicated long-range showcase shot.
+    { atTick: 0, type: 'ENGAGE', unitId: 'blue-arsenal-2', weaponId: 'hgv-condor', targetId: 'red-missile-1' },
+    { atTick: 1, type: 'ENGAGE', unitId: 'blue-arsenal-2', weaponId: 'hgv-condor', targetId: 'red-missile-1' },
+    // Reactive land SEAD against the air-defense site.
+    { atTick: 0, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'arm-lance', targetId: 'red-sam-1' },
+    // Naval: total stand-off.
+    { atTick: 0, type: 'ENGAGE', unitId: 'blue-drone-1', weaponId: 'asm-standoff', targetId: 'red-corvette-1' },
+    { atTick: 1, type: 'ENGAGE', unitId: 'blue-drone-1', weaponId: 'asm-standoff', targetId: 'red-corvette-1' },
+    { atTick: 0, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'asm-standoff', targetId: 'red-frigate-1' },
+    { atTick: 1, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'asm-standoff', targetId: 'red-frigate-1' },
+    // Hammer 1 dashes once the site is blind (~t=58) and kills it, then the
+    // nuclear facility.
+    { atTick: 70, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: 10_000, y: 3_000, alt: 8_000 }] },
+    { atTick: 210, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'agm-stormbreak', targetId: 'red-sam-1' },
+    { atTick: 211, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'agm-stormbreak', targetId: 'red-sam-1' },
+    { atTick: 212, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'agm-stormbreak', targetId: 'red-nuclear-1' },
+    { atTick: 213, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'agm-stormbreak', targetId: 'red-nuclear-1' },
+    // Hammer 2: the leadership site.
+    { atTick: 70, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [{ x: 14_000, y: -1_000, alt: 8_000 }] },
+    { atTick: 230, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'agm-stormbreak', targetId: 'red-leadership-site' },
+    { atTick: 231, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'agm-stormbreak', targetId: 'red-leadership-site' },
+  ];
+}
