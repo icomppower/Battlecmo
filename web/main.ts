@@ -1030,7 +1030,11 @@ function frame(now: number): void {
     }
   }
   if (mode3d && replay3d) {
-    replay3d.render(state, timeline.prev, camMode);
+    // Cinematic replay hands the camera to the 3D auto-director (driven off
+    // the same event stream as the captions below); manual selection resumes
+    // the moment cinematic stops.
+    replay3d.render(state, timeline.prev, cinematic ? 'director' : camMode);
+    map3dEl.dataset.shot = replay3d.currentShot;
   } else {
     renderer.draw(state, timeline.prev, view, {
       godView,
@@ -1064,6 +1068,9 @@ function frame(now: number): void {
   for (const btn of roeButtons) btn.classList.toggle('on', btn.dataset.roe === state.roe.BLUE);
   godBtn.classList.toggle('on', godView);
   view3dBtn.classList.toggle('on', mode3d);
+  // The auto-director owns the camera during 3D cinematic replay — manual
+  // selection is inert then, so disable it rather than let it silently do nothing.
+  camSel.disabled = mode3d && cinematic;
 
   // Scrubber.
   scrubber.max = String(timeline.states.length - 1);
