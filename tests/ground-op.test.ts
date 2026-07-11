@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { run } from '../src/core/tick';
 import { buildRescueScenario } from '../src/scenarios/rescue-op';
-import { heloRecklessPlan, rescueNoStrikePlan, rescuePlan } from '../src/scenarios/plans';
+import {
+  heloRecklessPlan,
+  rescueNavalGunfirePlan,
+  rescueNoStrikePlan,
+  rescuePlan,
+} from '../src/scenarios/plans';
 import { BREACH_ROSTER } from '../src/scenarios/breach-roster';
 
 const SEED = 42;
@@ -65,5 +70,23 @@ describe('rescue-op: the full multi-domain hostage rescue (build order step 4)',
     const before = JSON.stringify(BREACH_ROSTER);
     run(buildRescueScenario(), rescuePlan(), SEED, 1_600);
     expect(JSON.stringify(BREACH_ROSTER)).toBe(before);
+  });
+
+  it('naval gunfire support: the destroyer\'s Mk 45 services the MANPADS DMPI instead of the AGMs', () => {
+    const s = run(buildRescueScenario(), rescueNavalGunfirePlan(), SEED, 1_600);
+
+    // The gun did the killing — no strike aircraft ever fired at the guard.
+    const gunShots = s.events.filter(
+      (e) => e.type === 'LAUNCH' && e.shooterId === 'blue-destroyer-1' && e.weaponId === 'gun-mk45',
+    );
+    expect(gunShots.length).toBeGreaterThan(0);
+    expect(s.events.some((e) => e.type === 'LAUNCH' && e.weaponId === 'agm-stormbreak' && e.targetId === 'red-guard-1')).toBe(false);
+    expect(s.units['red-guard-1']!.alive).toBe(false);
+
+    // The mission still completes end to end, and nobody paid an airframe
+    // for the MANPADS this time.
+    expect(s.groundOp!.phase).toBe('EXTRACTED');
+    expect(s.units['blue-helo-1']!.alive).toBe(true);
+    expect(s.events.some((e) => e.type === 'LAUNCH' && e.side === 'RED')).toBe(false);
   });
 });

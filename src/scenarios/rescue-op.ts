@@ -41,6 +41,22 @@ export function buildRescueScenario(roster?: Operator[]): SimState {
       targetDomains: ['AIR'],
       requiredTrackQuality: 0.3,
     },
+    // Naval gunfire support (triage item E): the same ground-target envelope
+    // pattern as agm-stormbreak (ENGAGE-order-only, no track requirement),
+    // just min/max-range gated like an artillery piece and lower per-round
+    // Pk — a second, no-airframe-risk way to service a ground DMPI.
+    'gun-mk45': {
+      id: 'gun-mk45',
+      name: 'Mk 45 5-inch gun',
+      kind: 'AGM',
+      minRange: 2_000,
+      maxRange: 23_000,
+      minTargetAlt: 0,
+      maxTargetAlt: 100,
+      speed: 800,
+      pk: 0.4,
+      targetDomains: ['GROUND'],
+    },
   };
 
   // ---- The hostage site, its guard, and the ground team ----
@@ -111,6 +127,25 @@ export function buildRescueScenario(roster?: Operator[]): SimState {
 
   // Heavier strike loadout: two DMPIs (C2 node + MANPADS) at two AGMs each.
   s.units['blue-striker-2']!.weapons = [{ weaponId: 'agm-stormbreak', count: 4 }];
+
+  // Naval gunfire support: a destroyer standing off the coast within gun
+  // range of the hostage site, a second fire-support option for the MANPADS
+  // DMPI that spends no airframe risk at all — reference plans may use it
+  // in place of the striker's AGMs.
+  s.units['blue-destroyer-1'] = {
+    id: 'blue-destroyer-1',
+    side: 'BLUE',
+    domain: 'SEA',
+    name: 'Anvil (NGFS destroyer)',
+    pos: { x: 2_000, y: -30_000, alt: 12 },
+    speed: 0,
+    maxSpeed: 15,
+    rcs: 300,
+    sensors: [],
+    weapons: [{ weaponId: 'gun-mk45', count: 40 }],
+    waypoints: [],
+    alive: true,
+  };
 
   // The guard and the site join the briefed target deck.
   s.prebriefedTargets.BLUE.push('red-guard-1');

@@ -127,6 +127,49 @@ export function rescuePlan(): Order[] {
   ];
 }
 
+/**
+ * Naval gunfire support (triage item E): the same rescue-op mission, but the
+ * MANPADS DMPI is serviced by the destroyer's Mk 45 gun instead of the
+ * striker's AGMs — no aircraft ever has to fly anywhere near the guard.
+ * Everything else (jamming, reactive SEAD on the land IADS, the C2 strike,
+ * the ground team's timeline) is unchanged.
+ */
+export function rescueNavalGunfirePlan(): Order[] {
+  return [
+    { atTick: 0, type: 'SET_ROE', side: 'BLUE', level: 'TIGHT' },
+    { atTick: 0, type: 'SET_JAMMER', unitId: 'blue-ea-1', active: true },
+    { atTick: 0, type: 'GROUND_INFIL' },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-sead-1', waypoints: [{ x: -64_000, y: 2_000, alt: 9_000 }] },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [
+      { x: -50_000, y: -3_000, alt: 60 },
+      { x: -33_000, y: -3_000, alt: 60 },
+    ] },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [{ x: -50_000, y: 3_000, alt: 8_000 }] },
+    { atTick: 300, type: 'SET_WAYPOINTS', unitId: 'blue-helo-1', waypoints: [{ x: 500, y: -13_500, alt: 30 }] },
+    // The destroyer is already in range and pre-briefed — the gun opens the
+    // MANPADS DMPI cold, well before the helo is anywhere near its bubble.
+    // Hammer 1 keeps flying the same low bait profile (that leg does SEAD
+    // work for the land IADS, unrelated to the guard) but never has to
+    // detour onto the MANPADS itself.
+    { atTick: 10, type: 'ENGAGE', unitId: 'blue-destroyer-1', weaponId: 'gun-mk45', targetId: 'red-guard-1' },
+    { atTick: 11, type: 'ENGAGE', unitId: 'blue-destroyer-1', weaponId: 'gun-mk45', targetId: 'red-guard-1' },
+    { atTick: 12, type: 'ENGAGE', unitId: 'blue-destroyer-1', weaponId: 'gun-mk45', targetId: 'red-guard-1' },
+    { atTick: 430, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'arm-lance', targetId: 'red-sam-1' },
+    { atTick: 515, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [{ x: -27_000, y: 3_000, alt: 8_000 }] },
+    { atTick: 520, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: -20_000, y: -9_000, alt: 60 }] },
+    { atTick: 615, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'agm-stormbreak', targetId: 'red-hq' },
+    { atTick: 616, type: 'ENGAGE', unitId: 'blue-striker-2', weaponId: 'agm-stormbreak', targetId: 'red-hq' },
+    { atTick: 620, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: [{ x: -140_000, y: 3_000, alt: 8_000 }] },
+    { atTick: 730, type: 'GROUND_BREACH' },
+    { atTick: 825, type: 'GROUND_EXFIL' },
+    { atTick: 900, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [
+      { x: -60_000, y: -9_000, alt: 60 },
+      { x: -140_000, y: -3_000, alt: 8_000 },
+    ] },
+    { atTick: 1_010, type: 'SET_WAYPOINTS', unitId: 'blue-helo-1', waypoints: [{ x: -40_000, y: 10_000, alt: 30 }] },
+  ];
+}
+
 /** Ground op with no air support: the breach gate never opens, the clock runs out. */
 export function rescueNoStrikePlan(): Order[] {
   return [
@@ -481,6 +524,72 @@ export function fjordSeadPlan(): Order[] {
     { atTick: 231, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'agm-stormbreak', targetId: 'red-hq' },
     { atTick: 235, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: egress },
     { atTick: 245, type: 'SET_WAYPOINTS', unitId: 'blue-striker-2', waypoints: egress },
+  ];
+}
+
+/**
+ * The convoy's naive standoff shot (strike-convoy scenario) — and why there
+ * isn't one. asm-harpoon's 24 km reach is shorter than the frigate's
+ * sam-bastion ring (34 km), so ANY position in range of the HVU is already
+ * inside the SAM envelope. This plan just flies straight at the objective
+ * and pays for it: the frigate gets a full-quality track long before the
+ * striker is even close to release range and kills it at range, the harpoon
+ * never leaves the rail.
+ */
+export function naiveConvoyPlan(): Order[] {
+  return [
+    { atTick: 0, type: 'SET_ROE', side: 'BLUE', level: 'TIGHT' },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: 15_000, y: -1_000, alt: 8_000 }] },
+    { atTick: 700, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'asm-harpoon', targetId: 'red-supply-1' },
+  ];
+}
+
+/**
+ * The convoy counter-plan: anti-ship SEAD before the anti-ship strike. Viper
+ * holds at 50 km (well outside sam-bastion's 34 km ring) and fires
+ * arm-triton at t=360; the missile crosses the frigate's 14 km ARM reaction
+ * range ~t=425, forcing a 240-tick radar shutdown (until ~t=665). Hammer 1
+ * dashes the moment the shutdown lands, closes to harpoon range (~t=600,
+ * inside the blind window with 65 ticks to spare), releases, and turns for
+ * home immediately — the radar never gets a track on it before it is
+ * already running out the door.
+ */
+export function convoyPlan(): Order[] {
+  return [
+    { atTick: 0, type: 'SET_ROE', side: 'BLUE', level: 'TIGHT' },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-sead-1', waypoints: [{ x: -50_000, y: 3_000, alt: 9_000 }] },
+    { atTick: 0, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: -60_000, y: -3_000, alt: 8_000 }] },
+    { atTick: 360, type: 'ENGAGE', unitId: 'blue-sead-1', weaponId: 'arm-triton', targetId: 'red-frigate-1' },
+    { atTick: 425, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: 8_000, y: -1_000, alt: 8_000 }] },
+    { atTick: 600, type: 'ENGAGE', unitId: 'blue-striker-1', weaponId: 'asm-harpoon', targetId: 'red-supply-1' },
+    { atTick: 601, type: 'SET_WAYPOINTS', unitId: 'blue-striker-1', waypoints: [{ x: -160_000, y: -3_000, alt: 8_000 }] },
+    { atTick: 665, type: 'RTB', unitId: 'blue-sead-1' },
+  ];
+}
+
+/**
+ * The blue-on-blue picket dilemma (strike-picket scenario), playable. The
+ * picket is weapons-FREE by scenario default (that is the whole point — it
+ * is fleet air cover, not a discipline exercise); this plan is the only
+ * variable in the tragedy: the returning striker goes EMCON-silent and pays
+ * for it. The picket's launch decision ripens before VID quality does (see
+ * VID_QUALITY in sensors.ts), so there is no window in which a silent
+ * friend under FREE ROE is safe.
+ */
+export function picketHazardPlan(): Order[] {
+  return [{ atTick: 0, type: 'SET_IFF', unitId: 'blue-hammer-1', on: false }];
+}
+
+/**
+ * Counter 2 (ROE discipline): the striker stays just as silent, but BLUE
+ * ROE is TIGHT — with nothing pre-briefed, TIGHT clears nothing at all, so
+ * the picket never fires regardless of identity. (Counter 1, squawking, is
+ * the scenario's own default: leaving the transponder alone is the fix.)
+ */
+export function picketSafePlan(): Order[] {
+  return [
+    { atTick: 0, type: 'SET_IFF', unitId: 'blue-hammer-1', on: false },
+    { atTick: 0, type: 'SET_ROE', side: 'BLUE', level: 'TIGHT' },
   ];
 }
 
