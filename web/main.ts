@@ -8,11 +8,15 @@ import { buildFjordScenario } from '../src/scenarios/strike-fjord';
 import { buildConvoyScenario } from '../src/scenarios/strike-convoy';
 import { buildPicketScenario } from '../src/scenarios/strike-picket';
 import { buildTaiwanStrikeScenario } from '../src/scenarios/strike-taiwan';
+import { buildEpicFuryScenario } from '../src/scenarios/strike-epicfury';
 import {
   baitAndBlinkPlan,
   convoyPlan,
   decoyPackage,
   decoySweepPlan,
+  epicFuryPlanA,
+  epicFuryPlanB,
+  epicFuryPlanC,
   escalationPackage,
   escalationPlan,
   naiveConvoyPlan,
@@ -66,6 +70,7 @@ const SCENARIOS: Record<string, () => SimState> = {
   'strike-convoy': buildConvoyScenario,
   'strike-picket': buildPicketScenario,
   'strike-taiwan': buildTaiwanStrikeScenario,
+  'strike-epicfury': buildEpicFuryScenario,
 };
 
 const PRESETS: Record<string, { plan: () => Order[]; scenario: string; pkg?: () => AircraftConfig[] }> = {
@@ -88,6 +93,11 @@ const PRESETS: Record<string, { plan: () => Order[]; scenario: string; pkg?: () 
   taiwanplana: { plan: taiwanStrikePlanA, scenario: 'strike-taiwan' },
   taiwanplanb: { plan: taiwanStrikePlanB, scenario: 'strike-taiwan' },
   taiwanplanc: { plan: taiwanStrikePlanC, scenario: 'strike-taiwan' },
+  // Operation Epic Fury — documentary-style demo scenario (see
+  // strike-epicfury.ts module doc). Same "all plans fully clear" rule.
+  epicfurya: { plan: epicFuryPlanA, scenario: 'strike-epicfury' },
+  epicfuryb: { plan: epicFuryPlanB, scenario: 'strike-epicfury' },
+  epicfuryc: { plan: epicFuryPlanC, scenario: 'strike-epicfury' },
   // The brief says a staff solution is on file — this loads it. It is the
   // generator's own constructive winnability proof, timed to this mission's
   // sampled geometry and the nemesis's current doctrine.
