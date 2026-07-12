@@ -77,6 +77,92 @@ export const ASBM_WEAPONS: Record<string, WeaponDef> = {
 };
 
 // ---------------------------------------------------------------------------
+// Theater strike weapons — the wargame-map scenario roster's remaining gaps:
+// coastal-defense fires, bomber-launched standoff, long-range ground fires,
+// and the undersea leg. Same catalog-first policy as the ASBM entries above:
+// pure WeaponDef data on the existing envelope model, no engine changes.
+// ---------------------------------------------------------------------------
+
+export const THEATER_WEAPONS: Record<string, WeaponDef> = {
+  // Coastal-defense cruise missile analog (Taiwan Harpoon-CDCM / HF-3
+  // class): truck-launched anti-ship fires shot from the shoreline — the
+  // backbone of the "porcupine" distributed-denial concept (CNAS Hellscape
+  // wargaming). Mobile launchers hiding in coastal terrain make the
+  // *launcher* hard to attrit; the missile itself is an ordinary sea-
+  // skimmer, so it shares asm-pike/asm-standoff's mast-height envelope.
+  'cdcm-harpy': {
+    id: 'cdcm-harpy',
+    name: 'CDCM Harpy (coastal-defense ASM analog)',
+    kind: 'ASM',
+    minRange: 8_000,
+    maxRange: 150_000,
+    minTargetAlt: 0,
+    maxTargetAlt: 60,
+    speed: 290,
+    pk: 0.75,
+    targetDomains: ['SEA'],
+  },
+  // LRASM/JASSM-class analog: long-range, low-observable anti-ship standoff
+  // — bomber-launched, the standoff-duel workhorse. Same "pure data on the
+  // domain-generic envelope" story as tlam-blk5: a 900 km anti-ship reach
+  // needs zero engine changes, just a bigger maxRange. Subsonic like the
+  // real article — survivability comes from signature, not speed, and the
+  // long flight time (many ticks to arrive) is part of the tradeoff the
+  // map should show.
+  'lrasm-talon': {
+    id: 'lrasm-talon',
+    name: 'LRASM Talon (low-observable anti-ship standoff)',
+    kind: 'ASM',
+    minRange: 20_000,
+    maxRange: 900_000, // ~900 km stand-off
+    minTargetAlt: 0,
+    maxTargetAlt: 60,
+    speed: 240, // subsonic, low-observable — signature over speed
+    pk: 0.8,
+    targetDomains: ['SEA'],
+  },
+  // ATACMS/PrSM-class analog: long-range guided rocket/ballistic ground
+  // fires (the DSCA December-2025 Taiwan package's fires component).
+  // Modeled as kind 'AGM' like every other pre-briefed GROUND shot in this
+  // catalog (tlam-blk5, hgv-condor) — the ballistic flight profile is
+  // flavor; to the envelope model it is a fast, long-reach ground-attack
+  // weapon.
+  'prsm-hammer': {
+    id: 'prsm-hammer',
+    name: 'PrSM Hammer (long-range guided fires analog)',
+    kind: 'AGM',
+    minRange: 15_000,
+    maxRange: 400_000, // ~400 km
+    minTargetAlt: 0,
+    maxTargetAlt: 100,
+    speed: 1_000, // ballistic — fast next to a cruise missile, slow next to an RV
+    pk: 0.8,
+    targetDomains: ['GROUND'],
+  },
+  // Heavyweight submarine torpedo analog. kind 'ASM' — in this data model a
+  // torpedo IS a SEA-domain engagement: WeaponKind has no torpedo variant,
+  // and 'ASM' + targetDomains ['SEA'] is the entire semantic the envelope
+  // model reads. The physics live in the numbers instead: 26 m/s (~50 kt)
+  // crossing speed — an order of magnitude under every missile here, so
+  // even a max-range shot takes ~1,500 ticks — and maxTargetAlt 0, hulls at
+  // the waterline only. The high pk is honest: a heavyweight torpedo that
+  // reaches terminal homing rarely misses; getting the shot is the hard
+  // part.
+  'torp-blackfin': {
+    id: 'torp-blackfin',
+    name: 'Blackfin heavyweight torpedo',
+    kind: 'ASM',
+    minRange: 2_000,
+    maxRange: 40_000,
+    minTargetAlt: 0,
+    maxTargetAlt: 0, // waterline — hulls only, nothing airborne
+    speed: 26, // ~50 kt — the slow leg of the catalog by design
+    pk: 0.85,
+    targetDomains: ['SEA'],
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Sensor catalog — Battlecmo has never had one (every SensorDef so far is
 // authored inline on a unit or a store; see oob/assembly.ts's STORES for the
 // closest precedent: st-airsearch, st-gmti, st-irst). This is the first
@@ -151,6 +237,7 @@ export function buildSharedCatalog(): SharedCatalog {
       ...NEW_WEAPONS,
       ...EPICFURY_WEAPONS,
       ...ASBM_WEAPONS,
+      ...THEATER_WEAPONS,
     },
     airframes: {
       ...AIRFRAMES,

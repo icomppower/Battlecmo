@@ -1,7 +1,7 @@
 {
   "meta": {
     "source": "icomppower/Battlecmo",
-    "generated": "2026-07-12T01:21:35.534Z"
+    "generated": "2026-07-12T01:34:11.519Z"
   },
   "weapons": {
     "agm-stormbreak": {
@@ -203,6 +203,62 @@
       "maxTargetAlt": 60,
       "speed": 2400,
       "pk": 0.45,
+      "targetDomains": [
+        "SEA"
+      ]
+    },
+    "cdcm-harpy": {
+      "id": "cdcm-harpy",
+      "name": "CDCM Harpy (coastal-defense ASM analog)",
+      "kind": "ASM",
+      "minRange": 8000,
+      "maxRange": 150000,
+      "minTargetAlt": 0,
+      "maxTargetAlt": 60,
+      "speed": 290,
+      "pk": 0.75,
+      "targetDomains": [
+        "SEA"
+      ]
+    },
+    "lrasm-talon": {
+      "id": "lrasm-talon",
+      "name": "LRASM Talon (low-observable anti-ship standoff)",
+      "kind": "ASM",
+      "minRange": 20000,
+      "maxRange": 900000,
+      "minTargetAlt": 0,
+      "maxTargetAlt": 60,
+      "speed": 240,
+      "pk": 0.8,
+      "targetDomains": [
+        "SEA"
+      ]
+    },
+    "prsm-hammer": {
+      "id": "prsm-hammer",
+      "name": "PrSM Hammer (long-range guided fires analog)",
+      "kind": "AGM",
+      "minRange": 15000,
+      "maxRange": 400000,
+      "minTargetAlt": 0,
+      "maxTargetAlt": 100,
+      "speed": 1000,
+      "pk": 0.8,
+      "targetDomains": [
+        "GROUND"
+      ]
+    },
+    "torp-blackfin": {
+      "id": "torp-blackfin",
+      "name": "Blackfin heavyweight torpedo",
+      "kind": "ASM",
+      "minRange": 2000,
+      "maxRange": 40000,
+      "minTargetAlt": 0,
+      "maxTargetAlt": 0,
+      "speed": 26,
+      "pk": 0.85,
       "targetDomains": [
         "SEA"
       ]
