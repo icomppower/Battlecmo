@@ -1,0 +1,291 @@
+{
+  "meta": {
+    "source": "icomppower/Battlecmo",
+    "generated": "2026-07-12T01:21:35.534Z"
+  },
+  "weapons": {
+    "agm-stormbreak": {
+      "id": "agm-stormbreak",
+      "name": "AGM-77 Stormbreak",
+      "kind": "AGM",
+      "minRange": 2000,
+      "maxRange": 30000,
+      "minTargetAlt": 0,
+      "maxTargetAlt": 100,
+      "speed": 300,
+      "pk": 0.85,
+      "targetDomains": [
+        "GROUND"
+      ]
+    },
+    "arm-lance": {
+      "id": "arm-lance",
+      "name": "ARM-9 Lance",
+      "kind": "ARM",
+      "minRange": 5000,
+      "maxRange": 70000,
+      "minTargetAlt": 0,
+      "maxTargetAlt": 100,
+      "speed": 600,
+      "pk": 0.75,
+      "targetDomains": [
+        "GROUND"
+      ],
+      "antiRadiation": true
+    },
+    "sam-longbow": {
+      "id": "sam-longbow",
+      "name": "SA-31 Longbow",
+      "kind": "SAM",
+      "minRange": 3000,
+      "maxRange": 40000,
+      "minTargetAlt": 100,
+      "maxTargetAlt": 20000,
+      "speed": 800,
+      "pk": 0.7,
+      "targetDomains": [
+        "AIR"
+      ],
+      "requiredTrackQuality": 0.5
+    },
+    "aam-dart": {
+      "id": "aam-dart",
+      "name": "AAM-4 Dart",
+      "kind": "AAM",
+      "minRange": 1000,
+      "maxRange": 40000,
+      "minTargetAlt": 50,
+      "maxTargetAlt": 20000,
+      "speed": 900,
+      "pk": 0.7,
+      "targetDomains": [
+        "AIR"
+      ],
+      "requiredTrackQuality": 0.4
+    },
+    "asm-pike": {
+      "id": "asm-pike",
+      "name": "ASM-12 Pike",
+      "kind": "ASM",
+      "minRange": 8000,
+      "maxRange": 80000,
+      "minTargetAlt": 0,
+      "maxTargetAlt": 60,
+      "speed": 250,
+      "pk": 0.8,
+      "targetDomains": [
+        "SEA"
+      ]
+    },
+    "arm-triton": {
+      "id": "arm-triton",
+      "name": "ARM-14 Triton (anti-ship SEAD)",
+      "kind": "ARM",
+      "minRange": 5000,
+      "maxRange": 60000,
+      "minTargetAlt": 0,
+      "maxTargetAlt": 60,
+      "speed": 600,
+      "pk": 0.7,
+      "targetDomains": [
+        "SEA"
+      ],
+      "antiRadiation": true
+    },
+    "sam-hhq16": {
+      "id": "sam-hhq16",
+      "name": "HHQ-16-analog area SAM",
+      "kind": "SAM",
+      "minRange": 2000,
+      "maxRange": 34000,
+      "minTargetAlt": 20,
+      "maxTargetAlt": 10000,
+      "speed": 750,
+      "pk": 0.6,
+      "targetDomains": [
+        "AIR"
+      ],
+      "requiredTrackQuality": 0.5
+    },
+    "sam-hhq10": {
+      "id": "sam-hhq10",
+      "name": "HHQ-10-analog point SAM",
+      "kind": "SAM",
+      "minRange": 1500,
+      "maxRange": 20000,
+      "minTargetAlt": 20,
+      "maxTargetAlt": 8000,
+      "speed": 700,
+      "pk": 0.55,
+      "targetDomains": [
+        "AIR"
+      ],
+      "requiredTrackQuality": 0.5
+    },
+    "tlam-blk5": {
+      "id": "tlam-blk5",
+      "name": "BGM-Analog Blk V (subsonic cruise missile)",
+      "kind": "AGM",
+      "minRange": 5000,
+      "maxRange": 1200000,
+      "minTargetAlt": 0,
+      "maxTargetAlt": 100,
+      "speed": 240,
+      "pk": 0.85,
+      "targetDomains": [
+        "GROUND"
+      ]
+    },
+    "asm-standoff": {
+      "id": "asm-standoff",
+      "name": "ASM-14 Standoff",
+      "kind": "ASM",
+      "minRange": 5000,
+      "maxRange": 90000,
+      "minTargetAlt": 0,
+      "maxTargetAlt": 60,
+      "speed": 260,
+      "pk": 0.82,
+      "targetDomains": [
+        "SEA"
+      ]
+    },
+    "sam-seaguard": {
+      "id": "sam-seaguard",
+      "name": "SA-N-11 Seaguard (naval)",
+      "kind": "SAM",
+      "minRange": 1500,
+      "maxRange": 25000,
+      "minTargetAlt": 20,
+      "maxTargetAlt": 10000,
+      "speed": 700,
+      "pk": 0.6,
+      "targetDomains": [
+        "AIR"
+      ],
+      "requiredTrackQuality": 0.5
+    },
+    "hgv-condor": {
+      "id": "hgv-condor",
+      "name": "Condor HGV (hypersonic glide vehicle, ultra-long-range)",
+      "kind": "AGM",
+      "minRange": 50000,
+      "maxRange": 2500000,
+      "minTargetAlt": 0,
+      "maxTargetAlt": 100,
+      "speed": 1800,
+      "pk": 0.88,
+      "targetDomains": [
+        "GROUND"
+      ]
+    },
+    "asbm-anchor": {
+      "id": "asbm-anchor",
+      "name": "Anchor ASBM (DF-21D-class analog)",
+      "kind": "ASM",
+      "minRange": 100000,
+      "maxRange": 1500000,
+      "minTargetAlt": 0,
+      "maxTargetAlt": 60,
+      "speed": 2100,
+      "pk": 0.5,
+      "targetDomains": [
+        "SEA"
+      ]
+    },
+    "asbm-anchor-er": {
+      "id": "asbm-anchor-er",
+      "name": "Anchor-ER ASBM (DF-26-class analog)",
+      "kind": "ASM",
+      "minRange": 100000,
+      "maxRange": 4000000,
+      "minTargetAlt": 0,
+      "maxTargetAlt": 60,
+      "speed": 2400,
+      "pk": 0.45,
+      "targetDomains": [
+        "SEA"
+      ]
+    }
+  },
+  "airframes": {
+    "af-ranger": {
+      "id": "af-ranger",
+      "name": "F/A-21 Ranger (strike)",
+      "role": "STRIKE",
+      "hardpoints": 4,
+      "cleanRcs": 2,
+      "maxSpeed": 300,
+      "internalFuelKg": 5200,
+      "baseBurnKgPerTick": 1.2,
+      "bingoKg": 1800
+    },
+    "af-viper": {
+      "id": "af-viper",
+      "name": "F/A-21W Viper (SEAD)",
+      "role": "SEAD",
+      "hardpoints": 4,
+      "cleanRcs": 2,
+      "maxSpeed": 300,
+      "internalFuelKg": 5200,
+      "baseBurnKgPerTick": 1.2,
+      "bingoKg": 1800
+    },
+    "af-sentry": {
+      "id": "af-sentry",
+      "name": "E-9 Sentry (ISR)",
+      "role": "ISR",
+      "hardpoints": 2,
+      "cleanRcs": 20,
+      "maxSpeed": 180,
+      "internalFuelKg": 14000,
+      "baseBurnKgPerTick": 1.1,
+      "bingoKg": 3000
+    },
+    "af-shrike": {
+      "id": "af-shrike",
+      "name": "ADM-160 Shrike (decoy drone)",
+      "role": "DECOY",
+      "hardpoints": 1,
+      "cleanRcs": 0.4,
+      "maxSpeed": 220,
+      "internalFuelKg": 300,
+      "baseBurnKgPerTick": 0.25,
+      "bingoKg": 0
+    },
+    "af-static": {
+      "id": "af-static",
+      "name": "EA-11 Static (EW)",
+      "role": "EW",
+      "hardpoints": 3,
+      "cleanRcs": 6,
+      "maxSpeed": 250,
+      "internalFuelKg": 8000,
+      "baseBurnKgPerTick": 0.9,
+      "bingoKg": 2500
+    },
+    "af-onyx": {
+      "id": "af-onyx",
+      "name": "B-21 Onyx (B-2/B-21-class analog, heavy bomber)",
+      "role": "STRIKE",
+      "hardpoints": 8,
+      "cleanRcs": 0.15,
+      "maxSpeed": 250,
+      "internalFuelKg": 60000,
+      "baseBurnKgPerTick": 2,
+      "bingoKg": 8000
+    }
+  },
+  "sensors": {
+    "oth-longview": {
+      "kind": "RADAR",
+      "baseRange": 2500000,
+      "refRcs": 5,
+      "emitting": true,
+      "targetDomains": [
+        "AIR",
+        "SEA"
+      ]
+    }
+  }
+}
